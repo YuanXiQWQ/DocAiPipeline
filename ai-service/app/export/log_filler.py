@@ -21,7 +21,11 @@ from app.schemas import LogEntry, LogMeasurementResult, LogSheetMeta
 # ------------------------------------------------------------------
 
 def _patch_openpyxl_pivot_cache() -> None:
-    """让 CalculatedItem.formula 接受 None，避免 TypeError。"""
+    """修复 openpyxl 透视表加载问题。
+
+    1. 让 CalculatedItem.formula 接受 None，避免 TypeError。
+    2. 跳过 pivot_caches 解析，避免读取巨大的缓存文件导致卡住。
+    """
     try:
         from openpyxl.pivot.cache import CalculatedItem
         from openpyxl.descriptors.base import String
@@ -29,6 +33,103 @@ def _patch_openpyxl_pivot_cache() -> None:
         CalculatedItem.formula = String(allow_none=True)  # type: ignore[assignment]
     except (ImportError, AttributeError):
         pass  # 如果 openpyxl 版本不同，跳过
+
+    try:
+        from openpyxl.reader.workbook import WorkbookParser
+        _orig_pivot_caches = WorkbookParser.pivot_caches
+
+        @property  # type: ignore[misc]
+        def _empty_pivot_caches(self):  # type: ignore[no-untyped-def]
+            """跳过 pivotCacheRecords 解析（可达数十 MB），返回空字典。"""
+            return {}
+        WorkbookParser.pivot_caches = _empty_pivot_caches  # type: ignore[assignment]
+
+        # read_worksheets 中 pivot_caches[cacheId] 会 KeyError，需要跳过
+        import openpyxl.reader.excel as _xl_mod
+        _orig_read_ws = _xl_mod.ExcelReader.read_worksheets
+
+        def _safe_read_worksheets(self: object) -> None:  # type: ignore[no-untyped-def]
+            """包装 read_worksheets：让 pivot 关联失败时跳过而非中断。"""
+            import warnings as _w
+            import openpyxl.reader.excel as _m
+            from openpyxl.worksheet.worksheet import Worksheet
+            from openpyxl.xml.functions import fromstring
+            from openpyxl.packaging.relationship import (
+                get_dependents, get_rels_path, RelationshipList,
+            )
+            from openpyxl.worksheet._reader import WorksheetReader
+            from openpyxl.worksheet._read_only import ReadOnlyWorksheet
+            from openpyxl.comments.comment_sheet import CommentSheet
+            from openpyxl.drawing.spreadsheet_drawing import SpreadsheetDrawing
+            from openpyxl.reader.drawings import find_images
+            from openpyxl.worksheet.table import Table
+            from openpyxl.pivot.table import TableDefinition
+
+            COMMENTS_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments"
+            comment_warning = "Cell '{0}':{1} is part of a merged range but has a comment which will be removed because merged cells cannot contain any data."
+
+            for sheet, rel in self.parser.find_sheets():  # type: ignore[attr-defined]
+                if rel.target not in self.valid_files:  # type: ignore[attr-defined]
+                    continue
+                if "chartsheet" in rel.Type:
+                    self.read_chartsheet(sheet, rel)  # type: ignore[attr-defined]
+                    continue
+
+                rels_path = get_rels_path(rel.target)
+                rels = RelationshipList()
+                if rels_path in self.valid_files:  # type: ignore[attr-defined]
+                    rels = get_dependents(self.archive, rels_path)  # type: ignore[attr-defined]
+
+                if self.read_only:  # type: ignore[attr-defined]
+                    ws = ReadOnlyWorksheet(self.wb, sheet.name, rel.target, self.shared_strings)  # type: ignore[attr-defined]
+                    ws.sheet_state = sheet.state
+                    self.wb._sheets.append(ws)  # type: ignore[attr-defined]
+                    continue
+
+                fh = self.archive.open(rel.target)  # type: ignore[attr-defined]
+                ws = self.wb.create_sheet(sheet.name)  # type: ignore[attr-defined]
+                ws._rels = rels
+                ws_parser = WorksheetReader(ws, fh, self.shared_strings, self.data_only, self.rich_text)  # type: ignore[attr-defined]
+                ws_parser.bind_all()
+                fh.close()
+
+                for r in rels.find(COMMENTS_NS):
+                    src = self.archive.read(r.target)  # type: ignore[attr-defined]
+                    comment_sheet = CommentSheet.from_tree(fromstring(src))
+                    for ref, comment in comment_sheet.comments:
+                        try:
+                            ws[ref].comment = comment
+                        except AttributeError:
+                            pass
+
+                if self.wb.vba_archive and ws.legacy_drawing:  # type: ignore[attr-defined]
+                    ws.legacy_drawing = rels.get(ws.legacy_drawing).target
+                else:
+                    ws.legacy_drawing = None
+
+                for t in ws_parser.tables:
+                    src = self.archive.read(t)  # type: ignore[attr-defined]
+                    xml = fromstring(src)
+                    table = Table.from_tree(xml)
+                    ws.add_table(table)
+
+                drawings = rels.find(SpreadsheetDrawing._rel_type)
+                for r in drawings:
+                    charts, images = find_images(self.archive, r.target)  # type: ignore[attr-defined]
+                    for c in charts:
+                        ws.add_chart(c, c.anchor)
+                    for im in images:
+                        ws.add_image(im, im.anchor)
+
+                # ★ 跳过 pivot 关联（避免 KeyError / 巨大缓存解析）
+                # pivot_rel = rels.find(TableDefinition.rel_type)
+                # for r in pivot_rel: ...
+
+                ws.sheet_state = sheet.state
+
+        _xl_mod.ExcelReader.read_worksheets = _safe_read_worksheets  # type: ignore[assignment]
+    except (ImportError, AttributeError):
+        pass
 
 _patch_openpyxl_pivot_cache()
 
