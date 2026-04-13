@@ -36,13 +36,10 @@ def _patch_openpyxl_pivot_cache() -> None:
 
     try:
         from openpyxl.reader.workbook import WorkbookParser
-        _orig_pivot_caches = WorkbookParser.pivot_caches
 
-        @property  # type: ignore[misc]
-        def _empty_pivot_caches(self):  # type: ignore[no-untyped-def]
-            """跳过 pivotCacheRecords 解析（可达数十 MB），返回空字典。"""
-            return {}
-        WorkbookParser.pivot_caches = _empty_pivot_caches  # type: ignore[assignment]
+        # 跳过 pivotCacheRecords 解析（可达数十 MB），返回空字典
+        # noinspection PyPropertyAccess
+        WorkbookParser.pivot_caches = property(lambda _: {})  # type: ignore[assignment]
 
         # read_worksheets 中 pivot_caches[cacheId] 会 KeyError，需要跳过
         import openpyxl.reader.excel as _xl_mod
@@ -50,9 +47,6 @@ def _patch_openpyxl_pivot_cache() -> None:
 
         def _safe_read_worksheets(self: object) -> None:  # type: ignore[no-untyped-def]
             """包装 read_worksheets：让 pivot 关联失败时跳过而非中断。"""
-            import warnings as _w
-            import openpyxl.reader.excel as _m
-            from openpyxl.worksheet.worksheet import Worksheet
             from openpyxl.xml.functions import fromstring
             from openpyxl.packaging.relationship import (
                 get_dependents, get_rels_path, RelationshipList,
@@ -63,10 +57,8 @@ def _patch_openpyxl_pivot_cache() -> None:
             from openpyxl.drawing.spreadsheet_drawing import SpreadsheetDrawing
             from openpyxl.reader.drawings import find_images
             from openpyxl.worksheet.table import Table
-            from openpyxl.pivot.table import TableDefinition
 
-            COMMENTS_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments"
-            comment_warning = "Cell '{0}':{1} is part of a merged range but has a comment which will be removed because merged cells cannot contain any data."
+            comments_ns = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments"  # noqa: S105
 
             for sheet, rel in self.parser.find_sheets():  # type: ignore[attr-defined]
                 if rel.target not in self.valid_files:  # type: ignore[attr-defined]
@@ -83,7 +75,8 @@ def _patch_openpyxl_pivot_cache() -> None:
                 if self.read_only:  # type: ignore[attr-defined]
                     ws = ReadOnlyWorksheet(self.wb, sheet.name, rel.target, self.shared_strings)  # type: ignore[attr-defined]
                     ws.sheet_state = sheet.state
-                    self.wb._sheets.append(ws)  # type: ignore[attr-defined]
+                    # noinspection PyProtectedMember
+                    self.wb._sheets.append(ws)  # type: ignore[attr-defined]  # noqa: SLF001
                     continue
 
                 fh = self.archive.open(rel.target)  # type: ignore[attr-defined]
@@ -93,9 +86,9 @@ def _patch_openpyxl_pivot_cache() -> None:
                 ws_parser.bind_all()
                 fh.close()
 
-                for r in rels.find(COMMENTS_NS):
+                for r in rels.find(comments_ns):
                     src = self.archive.read(r.target)  # type: ignore[attr-defined]
-                    comment_sheet = CommentSheet.from_tree(fromstring(src))
+                    comment_sheet = CommentSheet.from_tree(fromstring(src))  # type: ignore[arg-type]
                     for ref, comment in comment_sheet.comments:
                         try:
                             ws[ref].comment = comment
@@ -110,10 +103,11 @@ def _patch_openpyxl_pivot_cache() -> None:
                 for t in ws_parser.tables:
                     src = self.archive.read(t)  # type: ignore[attr-defined]
                     xml = fromstring(src)
-                    table = Table.from_tree(xml)
+                    table = Table.from_tree(xml)  # type: ignore[arg-type]
                     ws.add_table(table)
 
-                drawings = rels.find(SpreadsheetDrawing._rel_type)
+                # noinspection PyProtectedMember
+                drawings = rels.find(SpreadsheetDrawing._rel_type)  # type: ignore[attr-defined]  # noqa: SLF001
                 for r in drawings:
                     charts, images = find_images(self.archive, r.target)  # type: ignore[attr-defined]
                     for c in charts:
@@ -122,8 +116,6 @@ def _patch_openpyxl_pivot_cache() -> None:
                         ws.add_image(im, im.anchor)
 
                 # ★ 跳过 pivot 关联（避免 KeyError / 巨大缓存解析）
-                # pivot_rel = rels.find(TableDefinition.rel_type)
-                # for r in pivot_rel: ...
 
                 ws.sheet_state = sheet.state
 

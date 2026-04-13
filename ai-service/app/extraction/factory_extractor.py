@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 import json
+from collections.abc import Callable
 
 import cv2
 import numpy as np
@@ -269,7 +270,7 @@ class FactoryExtractor:
             return self._empty_result(doc_type, filename, page, raw_text)
 
         # 根据类型解析
-        parsers = {
+        parsers: dict[str, Callable[[dict, str, int], BaseModel]] = {
             "log_output": self._parse_log_output,
             "soak_pool": self._parse_soak_pool,
             "slicing": self._parse_slicing,
