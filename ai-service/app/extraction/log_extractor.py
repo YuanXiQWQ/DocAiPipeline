@@ -11,8 +11,6 @@ from __future__ import annotations
 import base64
 import json
 import math
-from typing import List
-
 import cv2
 import numpy as np
 from loguru import logger

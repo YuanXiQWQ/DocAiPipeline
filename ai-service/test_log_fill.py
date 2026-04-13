@@ -64,8 +64,6 @@ def main():
     xls = pd.ExcelFile(output_path, engine="openpyxl")
     df = pd.read_excel(xls, sheet_name="数据源表", header=1)
 
-    # 找到新写入的行（检查批次号）
-    new_rows = df[df["序号、批次号\nRedni broj"].notna()]
     print(f"数据源表总行数: {len(df)}")
 
     # 显示最后几行

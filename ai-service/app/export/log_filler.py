@@ -27,7 +27,7 @@ def _patch_openpyxl_pivot_cache() -> None:
         from openpyxl.descriptors.base import String
         # 将 formula 改为 allow_none=True
         CalculatedItem.formula = String(allow_none=True)  # type: ignore[assignment]
-    except Exception:
+    except (ImportError, AttributeError):
         pass  # 如果 openpyxl 版本不同，跳过
 
 _patch_openpyxl_pivot_cache()
