@@ -85,24 +85,34 @@ class InvoiceFiller:
 
         ref_counter = 0
         has_fsc = False  # 跟踪批次中是否发现 EUR.1 证书
-        customs_decl_number = None  # 从报关单提取的关单号
-
-        # 第一轮：扫描所有记录，提取 EUR.1 和报关单信息
+        # 第一轮：扫描所有记录，提取 EUR.1 和各报关单的关单号
+        # 将关单号与来源文件关联（filename → 关单号）
+        customs_refs: dict[str, str] = {}
         for result in results:
             for record in result.records:
                 doc_type = self._get_field(record, "document_type").lower()
                 if "eur.1" in doc_type or "eur1" in doc_type or "movement certificate" in doc_type:
                     has_fsc = True
                 if "customs declaration" in doc_type:
-                    customs_decl_number = self._extract_customs_ref(
+                    ref = self._extract_customs_ref(
                         self._get_field(record, "declaration_number"),
                         self._get_field(record, "remarks"),
+                        result.filename,
                     )
+                    if ref:
+                        customs_refs[result.filename] = ref
 
         # 第二轮：为相关单据填充行
+        # 关单号匹配策略：遇到报关单文件时更新当前关单号，后续文件沿用
+        current_customs_ref: str | None = None
         current_row = start_row
         for result in results:
             source_file = result.filename
+
+            # 如果本文件包含报关单，更新当前关单号
+            if source_file in customs_refs:
+                current_customs_ref = customs_refs[source_file]
+
             for record in result.records:
                 doc_type = self._get_field(record, "document_type").lower()
 
@@ -115,8 +125,8 @@ class InvoiceFiller:
                 ref_num = self._generate_ref(batch_id, record, ref_counter)
 
                 row_data = self._map_record_to_row(record, source_file, ref_num, has_fsc)
-                # 将报关单号附到每一行的 V 列（“关单”）
-                row_data["V"] = customs_decl_number
+                # 将当前批次的关单号附到 V 列
+                row_data["V"] = current_customs_ref
                 self._write_row(ws, current_row, row_data)
                 current_row += 1
 
@@ -139,6 +149,7 @@ class InvoiceFiller:
         """将 CustomsRecord 映射为列值字典。"""
         doc_type = self._get_field(record, "document_type").lower()
         exporter = self._get_field(record, "exporter")
+        importer = self._get_field(record, "importer")
         date_str = self._get_field(record, "date")
         invoice_num = self._get_field(record, "invoice_number")
         decl_num = self._get_field(record, "declaration_number")
@@ -146,6 +157,10 @@ class InvoiceFiller:
         quantity = self._get_field(record, "quantity")
         currency = self._get_field(record, "currency")
         goods_desc = self._get_field(record, "goods_description")
+
+        # 智能纠正 importer/exporter 反转
+        # 如果 exporter 包含己方公司名（TERRA DRVO），说明 VLM 搞反了
+        supplier_raw = self._resolve_supplier(exporter, importer)
 
         # 确定名称（E 列）
         item_name = self._derive_item_name(doc_type, goods_desc)
@@ -164,7 +179,7 @@ class InvoiceFiller:
         date_val = self._parse_date(date_str)
 
         # 提取简短供应商名称
-        supplier = self._extract_supplier_name(exporter)
+        supplier = self._extract_supplier_name(supplier_raw)
 
         return {
             "A": self.owner,           # 所属人
@@ -195,6 +210,23 @@ class InvoiceFiller:
             "cmr", "transport document",
         ]
         return any(t in doc_type for t in skip_types)
+
+    @staticmethod
+    def _resolve_supplier(exporter: str, importer: str) -> str:
+        """智能判断供应商：如果 exporter 是己方公司则说明 VLM 反转了字段。
+
+        VLM 有时会把进口发票上的买方（TERRA DRVO）误标为 exporter，
+        把卖方误标为 importer。此方法检测并纠正这种情况。
+        """
+        own_company_keywords = ["terra drvo", "terra drvo doo", "terra drvo d.o.o"]
+        exporter_lower = exporter.lower() if exporter else ""
+
+        # 如果 exporter 是己方公司，取 importer 作为供应商
+        if any(kw in exporter_lower for kw in own_company_keywords):
+            if importer:
+                logger.debug(f"importer/exporter 反转纠正: exporter='{exporter[:30]}' → 使用 importer='{importer[:30]}'")
+                return importer
+        return exporter
 
     @staticmethod
     def _derive_item_name(doc_type: str, goods_desc: str) -> str:
@@ -234,6 +266,11 @@ class InvoiceFiller:
             "HRVATSKE ŠUME": "HRVATSKE ŠUME",
             "PREMIUM": "PREMIUM",
             "UŠP": "HRVATSKE ŠUME",
+            "A.D. GAJ": "AD GAJ",
+            "AD GAJ": "AD GAJ",
+            "A.D.GAJ": "AD GAJ",
+            "KULAS": "KULAS",
+            "ALPINA": "ALPINA",
         }
         name_upper = name.upper()
         for key, short in supplier_map.items():
@@ -259,12 +296,21 @@ class InvoiceFiller:
 
     @staticmethod
     def _parse_european_number(text: str) -> Optional[float]:
-        """解析欧洲格式数字（1.234,56）为浮点数。"""
+        """解析欧洲格式数字（1.234,56）为浮点数。
+
+        欧洲惯例：逗号是小数分隔符，点是千位分隔符。
+        但也需处理标准格式（点为小数）和混合情况。
+        """
         if not text:
             return None
 
+        raw = text
+
+        # 检测原始文本中是否有体积/重量单位提示（逗号必定是小数分隔符）
+        has_metric_unit = bool(re.search(r"m[³3²2]|kg|ton", raw, re.IGNORECASE))
+
         # 移除币种代码和单位
-        cleaned = re.sub(r"[A-Za-z³²%]+", "", text).strip()
+        cleaned = re.sub(r"[A-Za-z³²%]+", "", raw).strip()
         # 移除空格
         cleaned = cleaned.replace(" ", "")
 
@@ -283,10 +329,22 @@ class InvoiceFiller:
                 # 点是小数点：1,234.56
                 cleaned = cleaned.replace(",", "")
         elif "," in cleaned:
-            # 只有逗号：可能是小数 (3,61) 或千位分隔 (1,000)
+            # 只有逗号：可能是小数 (3,61 / 23,916) 或千位分隔 (1,000)
             parts = cleaned.split(",")
-            if len(parts) == 2 and len(parts[1]) <= 2:
-                cleaned = cleaned.replace(",", ".")
+            if len(parts) == 2:
+                after_comma = parts[1]
+                # 有体积/重量单位时，逗号一定是小数
+                if has_metric_unit:
+                    cleaned = cleaned.replace(",", ".")
+                # 逗号后 1-2 位：小数（3,61 → 3.61）
+                elif len(after_comma) <= 2:
+                    cleaned = cleaned.replace(",", ".")
+                # 逗号后 3 位且整数部分 < 4 位：更可能是小数（23,916 → 23.916）
+                elif len(after_comma) == 3 and len(parts[0]) <= 3:
+                    cleaned = cleaned.replace(",", ".")
+                else:
+                    # 千位分隔（如 103,700）
+                    cleaned = cleaned.replace(",", "")
             else:
                 cleaned = cleaned.replace(",", "")
         # 其他情况：只有点或无分隔符 — 标准格式
@@ -343,7 +401,7 @@ class InvoiceFiller:
         return row
 
     @staticmethod
-    def _extract_customs_ref(decl_number: str, remarks: str) -> str | None:
+    def _extract_customs_ref(decl_number: str, remarks: str, filename: str = "") -> str | None:
         """从报关单中提取关单号（V 列使用）。
 
         客户模板中的“关单”是一个简短编号（如 418、467）。
@@ -369,6 +427,12 @@ class InvoiceFiller:
         m = re.search(r'(\d{4,5})$', cleaned)
         if m:
             return m.group(1)
+
+        # 回退：从文件名提取（如 Deklaracija_42072_C4_3141_2026 → 3141）
+        if filename:
+            fn_match = re.search(r'C4[_\s](\d{3,5})', filename)
+            if fn_match:
+                return fn_match.group(1)
 
         return decl_number[:20] if decl_number else None
 
