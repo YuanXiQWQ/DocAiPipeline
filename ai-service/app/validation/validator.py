@@ -14,6 +14,15 @@ from app.schemas import CustomsField
 VALID_CURRENCIES: Set[str] = {
     "CNY", "USD", "EUR", "GBP", "JPY", "HRK", "KRW", "CAD", "AUD",
     "CHF", "SEK", "NOK", "DKK", "RUB", "INR", "BRL", "MXN", "HKD",
+    "RSD",  # Serbian Dinar
+}
+
+# Map common currency symbols / local names to ISO codes
+CURRENCY_ALIASES: dict[str, str] = {
+    "€": "EUR", "$": "USD", "£": "GBP", "¥": "CNY",
+    "元": "CNY", "人民币": "CNY",
+    "динар": "RSD", "динара": "RSD", "дин": "RSD", "dinar": "RSD",
+    "kuna": "HRK", "kn": "HRK",
 }
 
 # Date patterns to try for normalization
@@ -62,14 +71,22 @@ class FieldValidator:
 
     @staticmethod
     def _validate_currency(field: CustomsField) -> CustomsField:
-        """Check currency against whitelist."""
-        value_upper = field.value.strip().upper()
+        """Check currency against whitelist, resolving symbols/aliases first."""
+        raw = field.value.strip()
+        value_lower = raw.lower()
+
+        # Try alias lookup first (symbol → code, local name → code)
+        if value_lower in CURRENCY_ALIASES:
+            field.value = CURRENCY_ALIASES[value_lower]
+            return field
+
+        value_upper = raw.upper()
         if value_upper not in VALID_CURRENCIES:
             field.needs_review = True
-            field.review_reason = f"Unknown currency: '{field.value}'. Expected one of: {', '.join(sorted(VALID_CURRENCIES))}"
-            logger.warning(f"Invalid currency: {field.value}")
+            field.review_reason = f"Unknown currency: '{raw}'. Expected one of: {', '.join(sorted(VALID_CURRENCIES))}"
+            logger.warning(f"Invalid currency: {raw}")
         else:
-            field.value = value_upper  # normalize to uppercase
+            field.value = value_upper
         return field
 
     @staticmethod

@@ -64,8 +64,7 @@ class Preprocessor:
     @staticmethod
     def _denoise(image: np.ndarray) -> np.ndarray:
         """Remove noise using Non-Local Means Denoising."""
-        return cv2.fastNlMeansDenoisingColored(image, None, h=10, hForColoredImage=10,
-                                                templateWindowSize=7, searchWindowSize=21)
+        return cv2.fastNlMeansDenoisingColored(image, None, 10, 10, 7, 21)
 
     @staticmethod
     def _deskew(image: np.ndarray) -> np.ndarray:
