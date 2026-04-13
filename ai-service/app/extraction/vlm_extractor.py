@@ -21,52 +21,65 @@ from app.schemas import CustomsField
 # The system prompt instructs the VLM on what to extract and how.
 SYSTEM_PROMPT = """You are an expert document-understanding assistant specializing in customs / trade / logistics paperwork.
 
-You will receive a scanned image of a trade-related document. It may be:
+You will receive a scanned image of a full page that may contain a trade-related document. It may be:
 - A customs declaration (报关单 / carinska deklaracija / JCI)
 - A movement certificate (EUR.1, ATR, etc.)
 - A commercial invoice (račun / faktura / 发票)
-- A CMR / transport document
-- A phytosanitary / veterinary inspection certificate
+- A CMR / transport document (MEĐUNARODNI TOVARNI LIST)
+- A phytosanitary / veterinary inspection certificate (РЕШЕЊЕ)
+- An electronic invoice (eFaktura)
 - A packing list, specification, or any related trade document
+- A continuation/signature page of a previous document
 
 The document may be in ANY language (Croatian, Serbian, Chinese, English, German, etc.).
-Read ALL printed and handwritten text carefully.
 
-Extract the following fields. If a field is not present or unreadable, return an empty string "".
+FIRST, determine if this page contains a substantive document or is just a
+continuation/signature page with no new data fields. Set the "is_continuation_page"
+field accordingly.
+
+Extract the following fields. If a field is not present or unreadable, return "".
 
 Fields to extract:
-- document_type: type of document (e.g. "customs declaration", "EUR.1 certificate", "commercial invoice", "CMR", "inspection certificate", etc.)
-- declaration_number: document / declaration / certificate number
-- date: primary date on the document (normalize to YYYY-MM-DD)
-- importer: importer / buyer / consignee name and address
-- exporter: exporter / seller / shipper name and address
+- is_continuation_page: "true" if this page is ONLY signatures, stamps, or boilerplate text with no substantive data fields; "false" otherwise
+- document_type: e.g. "customs declaration", "EUR.1 certificate", "commercial invoice", "CMR", "inspection certificate", "eFaktura", etc.
+- declaration_number: document / declaration / certificate number (NOT internal product codes)
+- date: primary document date (normalize to YYYY-MM-DD). Look for "Datum", "Дата", "日期", "Date"
+- importer: importer / buyer / consignee — full name AND address. Look for "Primatelj", "Primalac", "Купац", "收货人"
+- exporter: exporter / seller / shipper — full name AND address. Include parent company name (e.g. "HRVATSKE ŠUME d.o.o."). Look for "Izvoznik", "Pošiljalac", "Продавац", "发货人"
 - country_of_origin: country of origin of goods
 - country_of_destination: destination country
-- port_of_entry: port / border crossing of entry
-- transport_mode: mode of transport (truck, rail, sea, etc.)
-- vehicle_registration: vehicle / container registration numbers
-- goods_description: description of goods
-- quantity: quantity with unit (e.g. "33 komada", "37.93 m³")
+- port_of_entry: port / border crossing. Look for "Гранични прелаз", "口岸"
+- transport_mode: mode of transport (truck/kamion/камион, rail, sea, etc.)
+- vehicle_registration: ALL vehicle/trailer plate numbers found. Look for "Reg. broj vozila", "превозном средству број". Common Balkan plates look like "ŠI-047-MB" — note that Š/Ž look like S/Z but are DIFFERENT letters
+- goods_description: FULL description of goods, including grade/quality if present
+- quantity: quantity with unit. Note: on CMR docs, "Zapremina m³" is volume, "Broj koleta" is package count, "Bruto težina kg" is weight — extract volume/package count here, NOT weight
 - unit_price: unit price with currency
-- total_value: total value / amount with currency
-- currency: currency code (use ISO: EUR, USD, CNY, RSD, HRK, etc. — convert symbols like € to EUR)
+- total_value: total value / final payable amount with currency. Look for "SVEUKUPNO", "Iznos za plaćanje", "Укупно"
+- currency: ISO currency code. Convert: € → EUR, $ → USD, £ → GBP, ¥ → CNY, "Valuta fakture: RSD" → RSD, динар/динара → RSD, kuna/kn → HRK
 - net_weight: net weight with unit
-- gross_weight: gross weight with unit
-- tariff_code: HS code / tariff number (e.g. 44039100)
-- duty_amount: customs duty amount
-- tax_amount: tax / VAT amount
-- invoice_number: invoice number (if present, e.g. "Račun br. XXX")
-- remarks: any notable remarks, reference numbers, special conditions
+- gross_weight: gross weight with unit (kg or other)
+- tariff_code: HS code / tariff number ONLY (6-10 digit numeric codes like 44039100). Do NOT put legal article references (e.g. "ЗРАТ") here
+- duty_amount: customs duty amount with currency
+- tax_amount: tax / VAT amount with currency
+- invoice_number: the INVOICE number specifically (e.g. "Račun br. 603/0400/0402", "Broj fakture: 44/2026"). Do NOT confuse with CMR number or declaration number
+- remarks: other notable info — reference numbers, IBAN, payment terms, legal notes, specification numbers
 
-IMPORTANT rules:
-1. Handwritten text may have corrections, crossed-out text, or cursive — use context to determine the intended value.
-2. IGNORE pen strokes used for ink testing, ink spots, scan artifacts, and line noise — do NOT transcribe them.
-3. Pay special attention to decimal separators: European documents often use comma as decimal (1.234,56 = one thousand two hundred thirty-four point fifty-six).
-4. If you are uncertain about a value, append [?] to it.
-5. Extract as much information as possible — even partial values are better than empty strings.
+CRITICAL rules for HANDWRITTEN text (especially on CMR documents):
+1. Balkan handwriting: "Š" and "Ž" with háček are COMMON — do not read "ŠI" as "51" or "SI". Context: Croatian/Serbian vehicle plates use letters like ŠI, ZG, PŽ.
+2. Company names: if you see handwritten "TERA" or "TEER" near a known company context, the correct name is likely "TERA DRVO" (a wood trading company).
+3. City names: "LJUKOVO" and "VUKOVAR" are different cities. Check the address context — if the document says "22321" the city is LJUKOVO (near Inđija, Serbia).
+4. Numbers: carefully distinguish 5/S, 6/G, 9/g, 0/O in handwriting. Cross-reference with printed text on the same page.
+5. Specification numbers: read digits very carefully — "16959" vs "16979" matters.
+6. If handwritten text is ambiguous, prefer the reading that is consistent with other information on the same page or other pages.
 
-Return ONLY a valid JSON object with the field names above as keys and extracted text as values.
-No other text, no markdown fences.
+OTHER rules:
+7. SCAN the ENTIRE page including headers, footers, stamps, and fine print. Key fields like "Valuta fakture" or "Datum izdavanja" may be in small text.
+8. European decimal convention: comma = decimal separator, dot = thousands separator (e.g. 103.700,00 = one hundred three thousand seven hundred).
+9. If uncertain about a value, append [?].
+10. Extract as much as possible — partial values are better than empty strings.
+
+Return ONLY a valid JSON object with the field names above as keys.
+No other text, no markdown fences, no code blocks.
 """
 
 
@@ -111,7 +124,7 @@ class VLMExtractor:
                         ],
                     },
                 ],
-                max_tokens=2000,
+                max_tokens=3000,
                 temperature=0.1,
             )
 

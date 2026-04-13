@@ -60,8 +60,7 @@ class Pipeline:
 
             # 4. Extract fields from each crop
             for i, (crop, box) in enumerate(zip(crops, boxes)):
-                record_index += 1
-                logger.info(f"  Extracting document {record_index} (page {page_num + 1}, region {i + 1})")
+                logger.info(f"  Extracting page {page_num + 1}, region {i + 1}")
 
                 # Save crop for review
                 crop_filename = f"{pdf_path.stem}_p{page_num + 1}_d{i + 1}.jpg"
@@ -72,9 +71,21 @@ class Pipeline:
                 try:
                     fields = self.extractor.extract(crop)
 
+                    # Check if VLM flagged this as a continuation/signature page
+                    if self._is_continuation_page(fields):
+                        logger.info(f"  Page {page_num + 1} is a continuation/signature page — skipping.")
+                        warnings.append(
+                            f"Page {page_num + 1}: continuation/signature page (skipped)"
+                        )
+                        continue
+
+                    # Remove the is_continuation_page meta field before validation
+                    fields = [f for f in fields if f.field_name != "is_continuation_page"]
+
                     # 5. Validate
                     fields = self.validator.validate(fields)
 
+                    record_index += 1
                     review_count = sum(1 for f in fields if f.needs_review)
                     if review_count > 0:
                         warnings.append(
@@ -90,8 +101,8 @@ class Pipeline:
                     ))
 
                 except Exception as e:
-                    logger.error(f"  Failed to extract document {record_index}: {e}")
-                    warnings.append(f"Record {record_index}: extraction failed — {e}")
+                    logger.error(f"  Failed to extract page {page_num + 1}: {e}")
+                    warnings.append(f"Page {page_num + 1}: extraction failed — {e}")
 
         result = PipelineResult(
             filename=pdf_path.name,
@@ -110,3 +121,11 @@ class Pipeline:
             f"{len(warnings)} warning(s) ==="
         )
         return result
+
+    @staticmethod
+    def _is_continuation_page(fields: list) -> bool:
+        """Check if the VLM marked this page as a continuation/signature page."""
+        for f in fields:
+            if f.field_name == "is_continuation_page":
+                return f.value.lower().strip() in ("true", "yes", "1")
+        return False

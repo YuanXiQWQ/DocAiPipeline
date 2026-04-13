@@ -161,9 +161,19 @@ class FieldValidator:
 
     @staticmethod
     def _validate_tariff_code(field: CustomsField) -> CustomsField:
-        """HS/tariff codes are typically 6-10 digit numbers."""
-        raw = field.value.strip().replace(".", "").replace(" ", "")
-        if not re.match(r"^\d{4,10}$", raw):
+        """HS/tariff codes are typically 6-10 digit numbers.  Allow comma-separated multiple codes."""
+        raw = field.value.strip()
+        # Split on comma/semicolon for multiple codes
+        parts = re.split(r"[,;]\s*", raw)
+        valid_parts: list[str] = []
+        for part in parts:
+            cleaned = part.strip().replace(".", "").replace(" ", "")
+            if re.match(r"^\d{4,10}$", cleaned):
+                valid_parts.append(cleaned)
+
+        if not valid_parts:
             field.needs_review = True
             field.review_reason = f"Tariff code format unexpected: '{field.value}'"
+        else:
+            field.value = ", ".join(valid_parts)
         return field

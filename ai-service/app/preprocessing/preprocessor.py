@@ -55,6 +55,7 @@ class Preprocessor:
         img = self._denoise(image)
         img = self._deskew(img)
         img = self._enhance_contrast(img)
+        img = self._sharpen(img)
         return img
 
     # ------------------------------------------------------------------
@@ -108,3 +109,13 @@ class Preprocessor:
         l_enhanced = clahe.apply(l_channel)
         enhanced = cv2.merge([l_enhanced, a, b])
         return cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
+
+    @staticmethod
+    def _sharpen(image: np.ndarray) -> np.ndarray:
+        """Mild sharpening to improve handwritten text clarity for VLM."""
+        kernel = np.array([
+            [0, -0.5, 0],
+            [-0.5, 3, -0.5],
+            [0, -0.5, 0],
+        ], dtype=np.float32)
+        return cv2.filter2D(image, -1, kernel)
