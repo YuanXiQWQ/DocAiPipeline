@@ -1,0 +1,28 @@
+# FastAPI & server
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+
+# PDF processing
+PyMuPDF>=1.25
+
+# Image processing
+opencv-python-headless>=4.10
+Pillow>=10.4
+numpy>=2.0
+
+# YOLO object detection
+ultralytics>=8.2
+
+# OpenAI VLM
+openai>=1.51
+
+# Data export
+openpyxl>=3.1
+pandas>=2.2
+
+# Configuration
+pydantic-settings>=2.5
+
+# Logging
+loguru>=0.7
