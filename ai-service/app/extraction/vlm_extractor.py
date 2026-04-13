@@ -19,38 +19,54 @@ from app.config import settings
 from app.schemas import CustomsField
 
 # The system prompt instructs the VLM on what to extract and how.
-SYSTEM_PROMPT = """你是一个专业的报关单识别助手。你将收到一张报关单（海关申报单）的图片。
-请仔细阅读图片中的所有内容（包括手写和印刷文字），并抽取以下字段。
-如果某个字段无法识别或图片中不存在，返回空字符串。
+SYSTEM_PROMPT = """You are an expert document-understanding assistant specializing in customs / trade / logistics paperwork.
 
-需要抽取的字段：
-- declaration_number: 报关单号/申报编号
-- date: 日期（格式化为 YYYY-MM-DD）
-- importer: 进口商/收货人名称
-- exporter: 出口商/发货人名称
-- country_of_origin: 原产国
-- port_of_entry: 进口口岸
-- transport_mode: 运输方式
-- goods_description: 货物名称/描述
-- quantity: 数量（含单位）
-- unit_price: 单价（含币种）
-- total_value: 总金额（含币种）
-- currency: 币种（如 CNY, USD, EUR, HRK 等）
-- net_weight: 净重（含单位）
-- gross_weight: 毛重（含单位）
-- tariff_code: 税则号/HS编码
-- duty_amount: 关税金额
-- tax_amount: 税额
-- remarks: 备注
+You will receive a scanned image of a trade-related document. It may be:
+- A customs declaration (报关单 / carinska deklaracija / JCI)
+- A movement certificate (EUR.1, ATR, etc.)
+- A commercial invoice (račun / faktura / 发票)
+- A CMR / transport document
+- A phytosanitary / veterinary inspection certificate
+- A packing list, specification, or any related trade document
 
-特别注意：
-1. 手写内容可能存在涂改、连笔，请结合上下文判断正确值
-2. 忽略干笔划线、墨点等噪声，不要将其识别为有效文字
-3. 数字中的小数点要特别注意，区分真正的小数点和噪声/遮挡造成的假象
-4. 如果某个值你不确定，在对应字段后加 [?] 标记
+The document may be in ANY language (Croatian, Serbian, Chinese, English, German, etc.).
+Read ALL printed and handwritten text carefully.
 
-请以严格的 JSON 格式返回，键为上述英文字段名，值为识别到的文本。
-仅返回 JSON，不要有其他文字。
+Extract the following fields. If a field is not present or unreadable, return an empty string "".
+
+Fields to extract:
+- document_type: type of document (e.g. "customs declaration", "EUR.1 certificate", "commercial invoice", "CMR", "inspection certificate", etc.)
+- declaration_number: document / declaration / certificate number
+- date: primary date on the document (normalize to YYYY-MM-DD)
+- importer: importer / buyer / consignee name and address
+- exporter: exporter / seller / shipper name and address
+- country_of_origin: country of origin of goods
+- country_of_destination: destination country
+- port_of_entry: port / border crossing of entry
+- transport_mode: mode of transport (truck, rail, sea, etc.)
+- vehicle_registration: vehicle / container registration numbers
+- goods_description: description of goods
+- quantity: quantity with unit (e.g. "33 komada", "37.93 m³")
+- unit_price: unit price with currency
+- total_value: total value / amount with currency
+- currency: currency code (use ISO: EUR, USD, CNY, RSD, HRK, etc. — convert symbols like € to EUR)
+- net_weight: net weight with unit
+- gross_weight: gross weight with unit
+- tariff_code: HS code / tariff number (e.g. 44039100)
+- duty_amount: customs duty amount
+- tax_amount: tax / VAT amount
+- invoice_number: invoice number (if present, e.g. "Račun br. XXX")
+- remarks: any notable remarks, reference numbers, special conditions
+
+IMPORTANT rules:
+1. Handwritten text may have corrections, crossed-out text, or cursive — use context to determine the intended value.
+2. IGNORE pen strokes used for ink testing, ink spots, scan artifacts, and line noise — do NOT transcribe them.
+3. Pay special attention to decimal separators: European documents often use comma as decimal (1.234,56 = one thousand two hundred thirty-four point fifty-six).
+4. If you are uncertain about a value, append [?] to it.
+5. Extract as much information as possible — even partial values are better than empty strings.
+
+Return ONLY a valid JSON object with the field names above as keys and extracted text as values.
+No other text, no markdown fences.
 """
 
 
@@ -83,7 +99,7 @@ class VLMExtractor:
                         "content": [
                             {
                                 "type": "text",
-                                "text": "请识别这张报关单中的所有字段信息。",
+                                "text": "Extract all fields from this trade document. Read every detail carefully.",
                             },
                             {
                                 "type": "image_url",

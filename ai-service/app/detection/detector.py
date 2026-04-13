@@ -83,49 +83,107 @@ class DocumentDetector:
 
     def _detect_contour_fallback(self, image: np.ndarray) -> List[BoundingBox]:
         """Heuristic: find large rectangular contours that likely represent
-        individual documents on the scanned page."""
+        individual documents on the scanned page.
+
+        Strategy:
+        1. Use line detection to find document boundaries (table borders, etc.)
+        2. Merge nearby content regions with morphology
+        3. If only one large region is found (>60% of page), use the full page
+           — this avoids partial crops when a page contains a single document
+        4. If multiple distinct regions found, return each as a separate doc
+        """
+        img_h, img_w = image.shape[:2]
+        img_area = img_h * img_w
+        full_page = BoundingBox(x1=0, y1=0, x2=float(img_w), y2=float(img_h), confidence=1.0)
+
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
 
-        # Adaptive threshold to handle varying lighting
+        # Binary threshold — try to detect document boundaries
         thresh = cv2.adaptiveThreshold(
             blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
             cv2.THRESH_BINARY_INV, 21, 10
         )
 
-        # Morphological close to merge nearby text/lines into blocks
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (50, 50))
-        closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+        # Two-pass morphology: first detect large structural blocks
+        # Use a large kernel to merge text lines into document-sized blobs
+        kernel_large = cv2.getStructuringElement(cv2.MORPH_RECT, (100, 100))
+        closed_large = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel_large)
 
-        contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(closed_large, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        img_area = image.shape[0] * image.shape[1]
-        min_area = img_area * 0.05   # document must be at least 5% of page
-        max_area = img_area * 0.95   # but not the entire page
+        # Filter contours by size
+        min_doc_area = img_area * 0.08   # at least 8% of page
+        single_doc_threshold = img_area * 0.60  # if >60% of page, it's a single-doc page
 
-        boxes: List[BoundingBox] = []
+        candidates: List[BoundingBox] = []
         for contour in contours:
             area = cv2.contourArea(contour)
-            if min_area < area < max_area:
-                x, y, w, h = cv2.boundingRect(contour)
-                aspect = w / h if h > 0 else 0
-                # Filter by reasonable aspect ratio for documents
-                if 0.3 < aspect < 3.0:
-                    boxes.append(BoundingBox(
-                        x1=float(x), y1=float(y),
-                        x2=float(x + w), y2=float(y + h),
-                        confidence=0.8,
-                    ))
+            if area < min_doc_area:
+                continue
+            x, y, w, h = cv2.boundingRect(contour)
+            aspect = w / h if h > 0 else 0
+            if 0.2 < aspect < 5.0:
+                candidates.append(BoundingBox(
+                    x1=float(x), y1=float(y),
+                    x2=float(x + w), y2=float(y + h),
+                    confidence=0.8,
+                ))
 
-        # Sort top-to-bottom, then left-to-right
-        boxes.sort(key=lambda b: (b.y1, b.x1))
+        # Decision logic
+        if len(candidates) == 0:
+            logger.info("No sub-documents detected — using full page.")
+            return [full_page]
 
-        # If no documents found, treat the whole image as one document
+        if len(candidates) == 1:
+            box = candidates[0]
+            box_area = (box.x2 - box.x1) * (box.y2 - box.y1)
+            if box_area > single_doc_threshold:
+                # Single large region — just use full page to avoid partial crop
+                logger.info("Single large region detected — using full page.")
+                return [full_page]
+            else:
+                logger.info("Single sub-document detected.")
+                return candidates
+
+        # Multiple candidates — merge overlapping ones, then return
+        candidates.sort(key=lambda b: (b.y1, b.x1))
+        merged = self._merge_overlapping(candidates)
+        logger.info(f"Contour fallback detected {len(merged)} document(s)")
+        return merged
+
+    @staticmethod
+    def _merge_overlapping(boxes: List[BoundingBox], iou_threshold: float = 0.3) -> List[BoundingBox]:
+        """Merge overlapping bounding boxes."""
         if not boxes:
-            h, w = image.shape[:2]
-            boxes = [BoundingBox(x1=0, y1=0, x2=float(w), y2=float(h), confidence=1.0)]
-            logger.info("No sub-documents detected — treating entire page as one document.")
-        else:
-            logger.info(f"Contour fallback detected {len(boxes)} document(s)")
+            return boxes
 
-        return boxes
+        result: List[BoundingBox] = [boxes[0]]
+        for box in boxes[1:]:
+            merged = False
+            for i, existing in enumerate(result):
+                # Check overlap
+                x1 = max(box.x1, existing.x1)
+                y1 = max(box.y1, existing.y1)
+                x2 = min(box.x2, existing.x2)
+                y2 = min(box.y2, existing.y2)
+                if x1 < x2 and y1 < y2:
+                    inter = (x2 - x1) * (y2 - y1)
+                    area_box = (box.x2 - box.x1) * (box.y2 - box.y1)
+                    area_ex = (existing.x2 - existing.x1) * (existing.y2 - existing.y1)
+                    iou = inter / (area_box + area_ex - inter)
+                    if iou > iou_threshold:
+                        # Merge: expand existing box
+                        result[i] = BoundingBox(
+                            x1=min(box.x1, existing.x1),
+                            y1=min(box.y1, existing.y1),
+                            x2=max(box.x2, existing.x2),
+                            y2=max(box.y2, existing.y2),
+                            confidence=max(box.confidence, existing.confidence),
+                        )
+                        merged = True
+                        break
+            if not merged:
+                result.append(box)
+
+        return result
