@@ -19,36 +19,34 @@
 from __future__ import annotations
 
 import re
-from copy import copy
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import openpyxl
 from loguru import logger
 
 from app.schemas import PipelineResult, CustomsRecord
 
-
 # ---------------------------------------------------------------------------
 # 配置：固定列的默认值
 # ---------------------------------------------------------------------------
 
-DEFAULT_OWNER = "新A"          # 所属人 — column A
-DEFAULT_COMPANY = "AL"         # 公司名 — column B
-DEFAULT_NATURE = "进口"         # 性质  — column D
-DEFAULT_FSC = "非"             # FSC   — column I
+DEFAULT_OWNER = "新A"  # 所属人 — column A
+DEFAULT_COMPANY = "AL"  # 公司名 — column B
+DEFAULT_NATURE = "进口"  # 性质  — column D
+DEFAULT_FSC = "非"  # FSC   — column I
 
 
 class InvoiceFiller:
     """从管线处理结果填充纸质发票记录表 Excel 模板。"""
 
     def __init__(
-        self,
-        template_path: str | Path,
-        sheet_name: str = "原始汇总",
-        owner: str = DEFAULT_OWNER,
-        company: str = DEFAULT_COMPANY,
+            self,
+            template_path: str | Path,
+            sheet_name: str = "原始汇总",
+            owner: str = DEFAULT_OWNER,
+            company: str = DEFAULT_COMPANY,
     ):
         self.template_path = Path(template_path)
         self.sheet_name = sheet_name
@@ -59,10 +57,10 @@ class InvoiceFiller:
             raise FileNotFoundError(f"Template not found: {self.template_path}")
 
     def fill(
-        self,
-        results: list[PipelineResult],
-        output_path: str | Path,
-        batch_id: Optional[str] = None,
+            self,
+            results: list[PipelineResult],
+            output_path: Path,
+            batch_id: Optional[str] = None,
     ) -> Path:
         """使用一个或多个管线结果填充模板。
 
@@ -74,8 +72,6 @@ class InvoiceFiller:
         返回:
             保存的文件路径。
         """
-        output_path = Path(output_path)
-
         wb = openpyxl.load_workbook(self.template_path)
         ws = wb[self.sheet_name]
 
@@ -124,7 +120,7 @@ class InvoiceFiller:
                 ref_counter += 1
                 ref_num = self._generate_ref(batch_id, record, ref_counter)
 
-                row_data = self._map_record_to_row(record, source_file, ref_num, has_fsc)
+                row_data = self._map_record_to_row(record, ref_num, has_fsc)
                 # 将当前批次的关单号附到 V 列
                 row_data["V"] = current_customs_ref
                 self._write_row(ws, current_row, row_data)
@@ -144,7 +140,7 @@ class InvoiceFiller:
     # ------------------------------------------------------------------
 
     def _map_record_to_row(
-        self, record: CustomsRecord, source_file: str, ref_num: str, has_fsc: bool
+            self, record: CustomsRecord, ref_num: str, has_fsc: bool
     ) -> dict:
         """将 CustomsRecord 映射为列值字典。"""
         doc_type = self._get_field(record, "document_type").lower()
@@ -155,7 +151,6 @@ class InvoiceFiller:
         decl_num = self._get_field(record, "declaration_number")
         total_value = self._get_field(record, "total_value")
         quantity = self._get_field(record, "quantity")
-        currency = self._get_field(record, "currency")
         goods_desc = self._get_field(record, "goods_description")
 
         # 智能纠正 importer/exporter 反转
@@ -182,18 +177,18 @@ class InvoiceFiller:
         supplier = self._extract_supplier_name(supplier_raw)
 
         return {
-            "A": self.owner,           # 所属人
-            "B": self.company,         # 公司名
-            "C": supplier,             # 供应商名称
-            "D": DEFAULT_NATURE,       # 性质
-            "E": item_name,            # 名称
-            "F": date_val,             # 日期
-            "G": bill_number,          # 发票号
-            "H": ref_num,              # 编号
-            "I": fsc,                  # FSC
+            "A": self.owner,  # 所属人
+            "B": self.company,  # 公司名
+            "C": supplier,  # 供应商名称
+            "D": DEFAULT_NATURE,  # 性质
+            "E": item_name,  # 名称
+            "F": date_val,  # 日期
+            "G": bill_number,  # 发票号
+            "H": ref_num,  # 编号
+            "I": fsc,  # FSC
             # J is formula =C{row}, handled in _write_row
-            "K": amount,               # 外币金额
-            "L": qty,                  # 数量
+            "K": amount,  # 外币金额
+            "L": qty,  # 数量
         }
 
     @staticmethod
@@ -224,7 +219,8 @@ class InvoiceFiller:
         # 如果 exporter 是己方公司，取 importer 作为供应商
         if any(kw in exporter_lower for kw in own_company_keywords):
             if importer:
-                logger.debug(f"importer/exporter 反转纠正: exporter='{exporter[:30]}' → 使用 importer='{importer[:30]}'")
+                logger.debug(
+                    f"importer/exporter 反转纠正: exporter='{exporter[:30]}' → 使用 importer='{importer[:30]}'")
                 return importer
         return exporter
 
@@ -355,7 +351,7 @@ class InvoiceFiller:
             return None
 
     @staticmethod
-    def _parse_date(date_str: str) -> Optional[datetime]:
+    def _parse_date(date_str: str) -> Union[datetime, str, None]:
         """解析日期字符串为 datetime。"""
         if not date_str:
             return None

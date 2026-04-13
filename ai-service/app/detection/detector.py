@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Tuple
+from typing import List
 
-import cv2
 import numpy as np
 from loguru import logger
 
@@ -42,8 +41,9 @@ class DocumentDetector:
             return self._detect_yolo(image)
         return self._detect_contour_fallback(image)
 
+    @staticmethod
     def crop_documents(
-        self, image: np.ndarray, boxes: List[BoundingBox], padding: int = 10
+        image: np.ndarray, boxes: List[BoundingBox], padding: int = 10
     ) -> List[np.ndarray]:
         """从图像中裁切检测到的区域。"""
         h, w = image.shape[:2]
@@ -79,7 +79,8 @@ class DocumentDetector:
     # 回退：基于轮廓的检测
     # ------------------------------------------------------------------
 
-    def _detect_contour_fallback(self, image: np.ndarray) -> List[BoundingBox]:
+    @staticmethod
+    def _detect_contour_fallback(image: np.ndarray) -> List[BoundingBox]:
         """回退策略（无 YOLO 模型时使用）。
 
         在没有微调模型的情况下，基于轮廓的分割不可靠——

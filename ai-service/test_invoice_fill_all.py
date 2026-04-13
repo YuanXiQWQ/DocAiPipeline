@@ -10,6 +10,7 @@ import sys
 import io
 import json
 from pathlib import Path
+from typing import TypedDict
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
@@ -26,8 +27,13 @@ def load_result(path: Path) -> PipelineResult:
     return PipelineResult(**data)
 
 
+class _Batch(TypedDict):
+    id: str
+    files: list[Path]
+
+
 # 按批次组织文件（每批次：报关单 + SKEN）
-BATCHES = [
+BATCHES: list[_Batch] = [
     {
         "id": "C4-3141",
         "files": [

@@ -7,12 +7,20 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import List, Optional
+from typing import List
 
 import cv2
 import numpy as np
 from loguru import logger
 from openai import OpenAI
+from openai.types.chat import (
+    ChatCompletionContentPartImageParam,
+    ChatCompletionContentPartParam,
+    ChatCompletionContentPartTextParam,
+    ChatCompletionMessageParam,
+    ChatCompletionSystemMessageParam,
+    ChatCompletionUserMessageParam,
+)
 
 from app.config import settings
 from app.schemas import CustomsField
@@ -85,7 +93,7 @@ No other text, no markdown fences, no code blocks.
 class VLMExtractor:
     """使用 VLM 从单据图像中抽取结构化字段。"""
 
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+    def __init__(self, api_key: str | None = None, model: str | None = None):
         self.api_key = api_key or settings.openai_api_key
         self.model = model or settings.openai_model
         if not self.api_key:
@@ -102,32 +110,39 @@ class VLMExtractor:
         b64_image = self._encode_image(image)
 
         try:
+            sys_msg: ChatCompletionSystemMessageParam = {
+                "role": "system",
+                "content": SYSTEM_PROMPT,
+            }
+            content_parts: list[ChatCompletionContentPartParam] = [
+                ChatCompletionContentPartTextParam(
+                    type="text",
+                    text="Extract all fields from this trade document. Read every detail carefully.",
+                ),
+                ChatCompletionContentPartImageParam(
+                    type="image_url",
+                    image_url={
+                        "url": f"data:image/jpeg;base64,{b64_image}",
+                        "detail": "high",
+                    },
+                ),
+            ]
+            user_msg: ChatCompletionUserMessageParam = {
+                "role": "user",
+                "content": content_parts,
+            }
+            messages: list[ChatCompletionMessageParam] = [sys_msg, user_msg]
+
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": "Extract all fields from this trade document. Read every detail carefully.",
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{b64_image}",
-                                    "detail": "high",
-                                },
-                            },
-                        ],
-                    },
-                ],
+                messages=messages,
                 max_tokens=3000,
                 temperature=0.1,
             )
 
-            raw_text = response.choices[0].message.content.strip()
+            content = response.choices[0].message.content
+            assert content is not None, "VLM returned empty content"
+            raw_text = content.strip()
             logger.debug(f"VLM raw response length: {len(raw_text)} chars")
             return self._parse_response(raw_text)
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Tuple
+from typing import List
 
 import cv2
 import fitz  # pymupdf
@@ -21,9 +21,8 @@ class Preprocessor:
     # 公开 API
     # ------------------------------------------------------------------
 
-    def pdf_to_images(self, pdf_path: str | Path) -> List[np.ndarray]:
+    def pdf_to_images(self, pdf_path: Path) -> List[np.ndarray]:
         """将 PDF 的每一页转换为 BGR numpy 数组。"""
-        pdf_path = Path(pdf_path)
         if not pdf_path.exists():
             raise FileNotFoundError(f"PDF not found: {pdf_path}")
 

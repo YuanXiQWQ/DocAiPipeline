@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import shutil
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import AsyncIterator
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import FileResponse
@@ -14,12 +16,6 @@ from app.config import settings
 from app.pipeline import Pipeline
 from app.schemas import HealthResponse, PipelineResult
 
-app = FastAPI(
-    title="DocAI Pipeline",
-    description="报关单自动识别与智能归档系统 — AI Service",
-    version="0.1.0",
-)
-
 # 懒加载管线（模型较重）
 _pipeline: Pipeline | None = None
 
@@ -28,7 +24,26 @@ def get_pipeline() -> Pipeline:
     global _pipeline
     if _pipeline is None:
         _pipeline = Pipeline()
+    assert _pipeline is not None
     return _pipeline
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """应用生命周期：启动时初始化目录与日志。"""
+    settings.ensure_dirs()
+    logger.info("DocAI Pipeline service started")
+    logger.info(f"Output dir: {settings.output_dir}")
+    logger.info(f"VLM model: {settings.openai_model}")
+    yield
+
+
+app = FastAPI(
+    title="DocAI Pipeline",
+    description="报关单自动识别与智能归档系统 — AI Service",
+    version="0.1.0",
+    lifespan=lifespan,
+)
 
 
 # ------------------------------------------------------------------
@@ -58,8 +73,8 @@ async def process_document(file: UploadFile = File(...)):
     settings.ensure_dirs()
     upload_id = uuid.uuid4().hex[:8]
     save_path = Path(settings.upload_dir) / f"{upload_id}_{file.filename}"
-    with open(save_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    with open(save_path, "wb") as buf:
+        shutil.copyfileobj(file.file, buf)  # type: ignore[arg-type]
 
     logger.info(f"Received file: {file.filename} → {save_path}")
 
@@ -79,19 +94,6 @@ async def download_file(filename: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail=f"File not found: {filename}")
     return FileResponse(path=str(file_path), filename=filename)
-
-
-# ------------------------------------------------------------------
-# 启动 / 关闭
-# ------------------------------------------------------------------
-
-
-@app.on_event("startup")
-async def startup():
-    settings.ensure_dirs()
-    logger.info("DocAI Pipeline service started")
-    logger.info(f"Output dir: {settings.output_dir}")
-    logger.info(f"VLM model: {settings.openai_model}")
 
 
 if __name__ == "__main__":

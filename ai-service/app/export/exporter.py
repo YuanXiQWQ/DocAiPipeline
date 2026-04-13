@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import List
+from typing import Any, List
 
 import pandas as pd
 from loguru import logger
@@ -22,10 +22,11 @@ class Exporter:
     def export_all(self, result: PipelineResult) -> dict[str, str]:
         """导出为所有格式。返回格式 → 文件路径的字典。"""
         stem = Path(result.filename).stem
-        paths = {}
-        paths["json"] = str(self.to_json(result, stem))
-        paths["csv"] = str(self.to_csv(result, stem))
-        paths["excel"] = str(self.to_excel(result, stem))
+        paths = {
+            "json": str(self.to_json(result, stem)),
+            "csv": str(self.to_csv(result, stem)),
+            "excel": str(self.to_excel(result, stem)),
+        }
         logger.info(f"Exported {result.total_documents_detected} records for '{result.filename}'")
         return paths
 
@@ -52,7 +53,7 @@ class Exporter:
         """将记录展平为 DataFrame，每份单据一行。"""
         rows = []
         for record in records:
-            row = {"record_index": record.record_index, "source_page": record.source_page}
+            row: dict[str, Any] = {"record_index": record.record_index, "source_page": record.source_page}
             for field in record.fields:
                 row[field.field_name] = field.value
                 if field.needs_review:

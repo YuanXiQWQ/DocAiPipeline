@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import cv2
 from loguru import logger
@@ -16,7 +15,7 @@ from app.detection import DocumentDetector
 from app.export import Exporter
 from app.extraction import VLMExtractor
 from app.preprocessing import Preprocessor
-from app.schemas import BoundingBox, CustomsRecord, PipelineResult
+from app.schemas import CustomsRecord, PipelineResult
 from app.validation import FieldValidator
 
 
@@ -34,9 +33,8 @@ class Pipeline:
         self.validator = FieldValidator()
         self.exporter = Exporter(output_dir=settings.output_dir)
 
-    def process(self, pdf_path: str | Path, export: bool = True) -> PipelineResult:
+    def process(self, pdf_path: Path, export: bool = True) -> PipelineResult:
         """将 PDF 文件送入完整管线进行处理。"""
-        pdf_path = Path(pdf_path)
         logger.info(f"=== Processing: {pdf_path.name} ===")
 
         # 1. PDF → 图像
