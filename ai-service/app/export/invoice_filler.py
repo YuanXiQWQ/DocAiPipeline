@@ -85,14 +85,19 @@ class InvoiceFiller:
 
         ref_counter = 0
         has_fsc = False  # 跟踪批次中是否发现 EUR.1 证书
+        customs_decl_number = None  # 从报关单提取的关单号
 
-        # 第一轮：检查是否有 EUR.1 证书
+        # 第一轮：扫描所有记录，提取 EUR.1 和报关单信息
         for result in results:
             for record in result.records:
                 doc_type = self._get_field(record, "document_type").lower()
                 if "eur.1" in doc_type or "eur1" in doc_type or "movement certificate" in doc_type:
                     has_fsc = True
-                    break
+                if "customs declaration" in doc_type:
+                    customs_decl_number = self._extract_customs_ref(
+                        self._get_field(record, "declaration_number"),
+                        self._get_field(record, "remarks"),
+                    )
 
         # 第二轮：为相关单据填充行
         current_row = start_row
@@ -110,6 +115,8 @@ class InvoiceFiller:
                 ref_num = self._generate_ref(batch_id, record, ref_counter)
 
                 row_data = self._map_record_to_row(record, source_file, ref_num, has_fsc)
+                # 将报关单号附到每一行的 V 列（“关单”）
+                row_data["V"] = customs_decl_number
                 self._write_row(ws, current_row, row_data)
                 current_row += 1
 
@@ -176,8 +183,13 @@ class InvoiceFiller:
 
     @staticmethod
     def _should_skip(doc_type: str) -> bool:
-        """判断该文档类型是否应跳过（非计费项目）。"""
+        """判断该文档类型是否应跳过（非计费项目）。
+
+        报关单 (customs declaration) 也跳过，因为它不单独占行，
+        其关单号会附在对应商业发票行的 V 列。
+        """
         skip_types = [
+            "customs declaration",
             "eur.1", "eur1", "movement certificate",
             "inspection certificate", "phytosanitary",
             "cmr", "transport document",
@@ -331,16 +343,49 @@ class InvoiceFiller:
         return row
 
     @staticmethod
+    def _extract_customs_ref(decl_number: str, remarks: str) -> str | None:
+        """从报关单中提取关单号（V 列使用）。
+
+        客户模板中的“关单”是一个简短编号（如 418、467）。
+        报关单号格式为 42072C420265659，其中末尾四位数字（5659）是核心编号。
+        """
+        if not decl_number:
+            return None
+
+        # 尝试从标准格式中提取：42072C420265659 → 5659
+        cleaned = re.sub(r'[\s\-]', '', decl_number)
+        # 匹配 42072C4YYYY#### 格式
+        m = re.search(r'42072C4\d{4}(\d{3,5})$', cleaned)
+        if m:
+            return m.group(1)
+
+        # 尝试从 remarks 中提取 JCI 号
+        if remarks:
+            jci_match = re.search(r'JCI\d{5,}', remarks)
+            if jci_match:
+                return jci_match.group()
+
+        # 回退：取末尾 4-5 位数字
+        m = re.search(r'(\d{4,5})$', cleaned)
+        if m:
+            return m.group(1)
+
+        return decl_number[:20] if decl_number else None
+
+    @staticmethod
     def _write_row(ws, row: int, data: dict):
         """将一行数据写入工作表。"""
         col_map = {"A": 1, "B": 2, "C": 3, "D": 4, "E": 5, "F": 6,
-                   "G": 7, "H": 8, "I": 9, "K": 11, "L": 12}
+                   "G": 7, "H": 8, "I": 9, "K": 11, "L": 12,
+                   "V": 22}  # V 列 = 关单号
 
         # 尽可能复制上一行的格式
         src_row = row - 1 if row > 3 else 3
 
         for col_letter, col_idx in col_map.items():
             value = data.get(col_letter)
+            if value is None:
+                continue
             cell = ws.cell(row=row, column=col_idx, value=value)
 
             # 复制源行的数字格式
@@ -348,5 +393,5 @@ class InvoiceFiller:
             if src_cell.number_format:
                 cell.number_format = src_cell.number_format
 
-        # Column J (供应商/备注) is always a formula: =C{row}
+        # J 列（供应商/备注）始终是公式: =C{row}
         ws.cell(row=row, column=10, value=f"=C{row}")
