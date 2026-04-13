@@ -1,4 +1,4 @@
-"""Pydantic models for API request/response and internal data."""
+"""Pydantic 数据模型：API 请求/响应及内部数据结构。"""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 
 class BoundingBox(BaseModel):
-    """Bounding box for a detected document region."""
+    """检测到的单据区域边界框。"""
     x1: float
     y1: float
     x2: float
@@ -16,7 +16,7 @@ class BoundingBox(BaseModel):
 
 
 class CustomsField(BaseModel):
-    """A single extracted field from a customs declaration."""
+    """从单据中抽取的单个字段。"""
     field_name: str
     value: str
     confidence: Optional[float] = None
@@ -25,7 +25,7 @@ class CustomsField(BaseModel):
 
 
 class CustomsRecord(BaseModel):
-    """Structured record for one customs declaration."""
+    """单份单据的结构化记录。"""
     record_index: int
     fields: list[CustomsField]
     source_page: int
@@ -34,7 +34,7 @@ class CustomsRecord(BaseModel):
 
 
 class PipelineResult(BaseModel):
-    """Result of processing a single uploaded file."""
+    """单个上传文件的处理结果。"""
     filename: str
     total_documents_detected: int
     records: list[CustomsRecord]

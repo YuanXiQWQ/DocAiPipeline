@@ -1,4 +1,4 @@
-"""PDF → image conversion and image preprocessing (denoise, deskew, contrast)."""
+"""PDF → 图像转换与图像预处理（去噪、纠偏、对比度增强、锐化）。"""
 
 from __future__ import annotations
 
@@ -12,17 +12,17 @@ from loguru import logger
 
 
 class Preprocessor:
-    """Converts PDFs to images and applies preprocessing steps."""
+    """将 PDF 转换为图像并应用预处理步骤。"""
 
     def __init__(self, dpi: int = 300):
         self.dpi = dpi
 
     # ------------------------------------------------------------------
-    # Public API
+    # 公开 API
     # ------------------------------------------------------------------
 
     def pdf_to_images(self, pdf_path: str | Path) -> List[np.ndarray]:
-        """Convert each page of a PDF to a BGR numpy array."""
+        """将 PDF 的每一页转换为 BGR numpy 数组。"""
         pdf_path = Path(pdf_path)
         if not pdf_path.exists():
             raise FileNotFoundError(f"PDF not found: {pdf_path}")
@@ -38,7 +38,7 @@ class Preprocessor:
             img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
                 pix.h, pix.w, pix.n
             )
-            # Convert RGB → BGR for OpenCV compatibility
+            # 转换 RGB → BGR 以兼容 OpenCV
             if pix.n == 4:  # RGBA
                 img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
             elif pix.n == 3:  # RGB
@@ -51,7 +51,7 @@ class Preprocessor:
         return images
 
     def preprocess(self, image: np.ndarray) -> np.ndarray:
-        """Apply full preprocessing pipeline to a single image."""
+        """对单张图像应用完整的预处理流程。"""
         img = self._denoise(image)
         img = self._deskew(img)
         img = self._enhance_contrast(img)
@@ -59,17 +59,17 @@ class Preprocessor:
         return img
 
     # ------------------------------------------------------------------
-    # Private helpers
+    # 内部辅助方法
     # ------------------------------------------------------------------
 
     @staticmethod
     def _denoise(image: np.ndarray) -> np.ndarray:
-        """Remove noise using Non-Local Means Denoising."""
+        """使用非局部均值去噪去除噪点。"""
         return cv2.fastNlMeansDenoisingColored(image, None, 10, 10, 7, 21)
 
     @staticmethod
     def _deskew(image: np.ndarray) -> np.ndarray:
-        """Correct slight rotation using Hough line detection."""
+        """使用霍夫线检测纠正轻微旋转。"""
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         edges = cv2.Canny(gray, 50, 150, apertureSize=3)
         lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=100,
@@ -81,14 +81,14 @@ class Preprocessor:
         for line in lines:
             x1, y1, x2, y2 = line[0]
             angle = np.degrees(np.arctan2(y2 - y1, x2 - x1))
-            if abs(angle) < 15:  # only consider near-horizontal lines
+            if abs(angle) < 15:  # 只考虑接近水平的线
                 angles.append(angle)
 
         if not angles:
             return image
 
         median_angle = float(np.median(angles))
-        if abs(median_angle) < 0.3:  # skip if nearly straight
+        if abs(median_angle) < 0.3:  # 几乎正直则跳过
             return image
 
         logger.debug(f"Deskew angle: {median_angle:.2f}°")
@@ -102,7 +102,7 @@ class Preprocessor:
 
     @staticmethod
     def _enhance_contrast(image: np.ndarray) -> np.ndarray:
-        """Enhance contrast using CLAHE on the L channel of LAB color space."""
+        """在 LAB 色彩空间的 L 通道上使用 CLAHE 增强对比度。"""
         lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
         l_channel, a, b = cv2.split(lab)
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
@@ -112,7 +112,7 @@ class Preprocessor:
 
     @staticmethod
     def _sharpen(image: np.ndarray) -> np.ndarray:
-        """Mild sharpening to improve handwritten text clarity for VLM."""
+        """轻度锐化以提高 VLM 对手写文字的识别清晰度。"""
         kernel = np.array([
             [0, -0.5, 0],
             [-0.5, 3, -0.5],

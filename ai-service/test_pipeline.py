@@ -1,11 +1,11 @@
-"""Quick end-to-end test using a sample PDF."""
+"""使用样例 PDF 的快速端到端测试。"""
 
 import sys
 import io
 from pathlib import Path
 from app.pipeline import Pipeline
 
-# Fix Windows terminal encoding
+# 修复 Windows 终端编码
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
 SAMPLE_PDF = Path(__file__).resolve().parent.parent / "文档" / "样例" / "SKEN.36.pdf"
@@ -39,7 +39,7 @@ def main():
     print(f"\n{'='*60}")
     print("Done. Check output/ directory for exported files.")
 
-    # Show exported JSON path
+    # 显示导出的 JSON 路径
     output_dir = Path("output")
     for f in output_dir.glob("SKEN.36.*"):
         print(f"  -> {f}")

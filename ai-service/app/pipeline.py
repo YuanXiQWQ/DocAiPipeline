@@ -1,6 +1,6 @@
-"""Core pipeline orchestrator — ties all stages together.
+"""核心管线编排器：串联所有处理阶段。
 
-Flow: PDF → preprocess → detect documents → VLM extract → validate → export
+流程：PDF → 预处理 → 单据检测 → VLM 抽取 → 规则校验 → 导出
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from app.validation import FieldValidator
 
 
 class Pipeline:
-    """End-to-end document processing pipeline."""
+    """端到端单据处理管线。"""
 
     def __init__(self):
         settings.ensure_dirs()
@@ -35,11 +35,11 @@ class Pipeline:
         self.exporter = Exporter(output_dir=settings.output_dir)
 
     def process(self, pdf_path: str | Path, export: bool = True) -> PipelineResult:
-        """Process a PDF file through the full pipeline."""
+        """将 PDF 文件送入完整管线进行处理。"""
         pdf_path = Path(pdf_path)
         logger.info(f"=== Processing: {pdf_path.name} ===")
 
-        # 1. PDF → images
+        # 1. PDF → 图像
         raw_images = self.preprocessor.pdf_to_images(pdf_path)
 
         all_records: list[CustomsRecord] = []
@@ -49,20 +49,20 @@ class Pipeline:
         for page_num, raw_img in enumerate(raw_images):
             logger.info(f"--- Page {page_num + 1}/{len(raw_images)} ---")
 
-            # 2. Preprocess
+            # 2. 预处理
             processed_img = self.preprocessor.preprocess(raw_img)
 
-            # 3. Detect individual documents
+            # 3. 检测单据区域
             boxes = self.detector.detect(processed_img)
             crops = self.detector.crop_documents(processed_img, boxes)
 
             logger.info(f"Page {page_num + 1}: {len(crops)} document(s) detected")
 
-            # 4. Extract fields from each crop
+            # 4. 对每个裁切区域抽取字段
             for i, (crop, box) in enumerate(zip(crops, boxes)):
                 logger.info(f"  Extracting page {page_num + 1}, region {i + 1}")
 
-                # Save crop for review
+                # 保存裁切图片以便复查
                 crop_filename = f"{pdf_path.stem}_p{page_num + 1}_d{i + 1}.jpg"
                 crop_path = Path(settings.output_dir) / "crops" / crop_filename
                 crop_path.parent.mkdir(parents=True, exist_ok=True)
@@ -71,7 +71,7 @@ class Pipeline:
                 try:
                     fields = self.extractor.extract(crop)
 
-                    # Check if VLM flagged this as a continuation/signature page
+                    # 检查 VLM 是否标记此页为续页/签名页
                     if self._is_continuation_page(fields):
                         logger.info(f"  Page {page_num + 1} is a continuation/signature page — skipping.")
                         warnings.append(
@@ -79,10 +79,10 @@ class Pipeline:
                         )
                         continue
 
-                    # Remove the is_continuation_page meta field before validation
+                    # 在校验前移除 is_continuation_page 元字段
                     fields = [f for f in fields if f.field_name != "is_continuation_page"]
 
-                    # 5. Validate
+                    # 5. 校验
                     fields = self.validator.validate(fields)
 
                     record_index += 1
@@ -111,7 +111,7 @@ class Pipeline:
             warnings=warnings,
         )
 
-        # 6. Export
+        # 6. 导出
         if export:
             export_paths = self.exporter.export_all(result)
             logger.info(f"Exported to: {export_paths}")
@@ -124,7 +124,7 @@ class Pipeline:
 
     @staticmethod
     def _is_continuation_page(fields: list) -> bool:
-        """Check if the VLM marked this page as a continuation/signature page."""
+        """检查 VLM 是否将此页标记为续页/签名页。"""
         for f in fields:
             if f.field_name == "is_continuation_page":
                 return f.value.lower().strip() in ("true", "yes", "1")

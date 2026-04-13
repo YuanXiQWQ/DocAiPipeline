@@ -1,7 +1,6 @@
-"""VLM-based end-to-end field extraction from customs declaration images.
+"""基于 VLM 的单据图像端到端字段抽取。
 
-Uses OpenAI's vision-capable models to read both printed and handwritten
-text, understand document structure, and extract fields as structured JSON.
+使用 OpenAI 视觉模型读取印刷体和手写文字，理解文档结构，并以结构化 JSON 格式抽取字段。
 """
 
 from __future__ import annotations
@@ -18,7 +17,7 @@ from openai import OpenAI
 from app.config import settings
 from app.schemas import CustomsField
 
-# The system prompt instructs the VLM on what to extract and how.
+# 系统提示词：指导 VLM 抽取哪些字段以及如何抽取（保持英文，因为是给 AI 模型的指令）。
 SYSTEM_PROMPT = """You are an expert document-understanding assistant specializing in customs / trade / logistics paperwork.
 
 You will receive a scanned image of a full page that may contain a trade-related document. It may be:
@@ -84,7 +83,7 @@ No other text, no markdown fences, no code blocks.
 
 
 class VLMExtractor:
-    """Extract structured fields from customs declaration images using VLM."""
+    """使用 VLM 从单据图像中抽取结构化字段。"""
 
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
         self.api_key = api_key or settings.openai_api_key
@@ -96,7 +95,7 @@ class VLMExtractor:
             self.client = OpenAI(api_key=self.api_key)
 
     def extract(self, image: np.ndarray) -> List[CustomsField]:
-        """Extract fields from a single document crop image."""
+        """从单份单据裁切图像中抽取字段。"""
         if self.client is None:
             raise RuntimeError("OpenAI client not initialized. Set OPENAI_API_KEY.")
 
@@ -137,12 +136,12 @@ class VLMExtractor:
             raise
 
     # ------------------------------------------------------------------
-    # Helpers
+    # 辅助方法
     # ------------------------------------------------------------------
 
     @staticmethod
     def _encode_image(image: np.ndarray) -> str:
-        """Encode a BGR numpy image as base64 JPEG string."""
+        """将 BGR numpy 图像编码为 base64 JPEG 字符串。"""
         success, buffer = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 95])
         if not success:
             raise ValueError("Failed to encode image to JPEG")
@@ -150,8 +149,8 @@ class VLMExtractor:
 
     @staticmethod
     def _parse_response(raw_text: str) -> List[CustomsField]:
-        """Parse VLM JSON response into a list of CustomsField."""
-        # Strip markdown code fences if present
+        """解析 VLM 的 JSON 响应为 CustomsField 列表。"""
+        # 去除可能存在的 Markdown 代码围栏
         text = raw_text.strip()
         if text.startswith("```"):
             lines = text.split("\n")

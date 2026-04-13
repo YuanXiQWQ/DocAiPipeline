@@ -1,4 +1,4 @@
-"""Batch test: run pipeline on all sample PDFs and produce a summary report."""
+"""批量测试：对所有样例 PDF 运行管线并生成汇总报告。"""
 
 import sys
 import io
@@ -6,7 +6,7 @@ import json
 import time
 from pathlib import Path
 
-# Fix Windows terminal encoding
+# 修复 Windows 终端编码
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
 from app.pipeline import Pipeline
@@ -16,13 +16,13 @@ REPORT_PATH = Path(__file__).resolve().parent / "output" / "batch_report.json"
 
 
 def collect_pdfs(sample_dir: Path) -> list[Path]:
-    """Collect unique PDFs (skip 备份 folder duplicates)."""
+    """收集唯一的 PDF（跳过备份文件夹中的副本）。"""
     pdfs = sorted(sample_dir.glob("*.pdf"))
     return pdfs
 
 
 def count_filled_fields(record) -> tuple[int, int]:
-    """Return (filled, total) field counts for a record."""
+    """返回记录的（已填充, 总数）字段计数。"""
     total = 0
     filled = 0
     for f in record.fields:
@@ -40,7 +40,7 @@ def main():
         print("No PDFs found. Exiting.")
         return
 
-    # Show list and confirm
+    # 显示文件列表
     for i, p in enumerate(pdfs, 1):
         print(f"  {i:2d}. {p.name}")
 
@@ -62,7 +62,7 @@ def main():
             result = pipeline.process(pdf_path)
             elapsed = time.time() - start
 
-            # Compute stats
+            # 计算统计数据
             total_fields = 0
             filled_fields = 0
             review_fields = 0
@@ -107,7 +107,7 @@ def main():
 
     total_elapsed = time.time() - total_start
 
-    # Print summary table
+    # 打印汇总表格
     print(f"\n\n{'='*80}")
     print(f"BATCH TEST SUMMARY")
     print(f"{'='*80}")
@@ -134,7 +134,7 @@ def main():
     print(f"{'TOTAL':<55} {total_records:>7} {avg_fill:>5.1f}% {'':>7} {total_elapsed:>5.1f}s")
     print(f"\nSuccess: {success_count}/{len(pdfs)}")
 
-    # Save report
+    # 保存报告
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(REPORT_PATH, "w", encoding="utf-8") as f:
         json.dump({

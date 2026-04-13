@@ -1,5 +1,4 @@
-"""YOLO-based document detection — locates individual customs declarations
-in a scanned page that may contain multiple documents."""
+"""基于 YOLO 的单据检测：在可能包含多份单据的扫描页面中定位各个单据。"""
 
 from __future__ import annotations
 
@@ -14,10 +13,9 @@ from app.schemas import BoundingBox
 
 
 class DocumentDetector:
-    """Detects individual customs documents within a scanned page image.
+    """在扫描页面图像中检测单份单据。
 
-    In MVP phase, if no fine-tuned YOLO model is available, falls back to
-    a contour-based heuristic that finds rectangular regions.
+    MVP 阶段：若无微调后的 YOLO 模型，则回退到基于轮廓的启发式检测。
     """
 
     def __init__(self, model_path: str | Path | None = None, confidence: float = 0.5):
@@ -35,11 +33,11 @@ class DocumentDetector:
             logger.info("No YOLO model found — using contour-based fallback detector.")
 
     # ------------------------------------------------------------------
-    # Public API
+    # 公开 API
     # ------------------------------------------------------------------
 
     def detect(self, image: np.ndarray) -> List[BoundingBox]:
-        """Return bounding boxes for each detected document in the image."""
+        """返回图像中每份检测到的单据的边界框。"""
         if self.model is not None:
             return self._detect_yolo(image)
         return self._detect_contour_fallback(image)
@@ -47,7 +45,7 @@ class DocumentDetector:
     def crop_documents(
         self, image: np.ndarray, boxes: List[BoundingBox], padding: int = 10
     ) -> List[np.ndarray]:
-        """Crop detected regions from the image."""
+        """从图像中裁切检测到的区域。"""
         h, w = image.shape[:2]
         crops: List[np.ndarray] = []
         for box in boxes:
@@ -59,7 +57,7 @@ class DocumentDetector:
         return crops
 
     # ------------------------------------------------------------------
-    # YOLO detection
+    # YOLO 检测
     # ------------------------------------------------------------------
 
     def _detect_yolo(self, image: np.ndarray) -> List[BoundingBox]:
@@ -78,24 +76,22 @@ class DocumentDetector:
         return boxes
 
     # ------------------------------------------------------------------
-    # Fallback: contour-based detection
+    # 回退：基于轮廓的检测
     # ------------------------------------------------------------------
 
     def _detect_contour_fallback(self, image: np.ndarray) -> List[BoundingBox]:
-        """Fallback strategy (no YOLO model available).
+        """回退策略（无 YOLO 模型时使用）。
 
-        Without a fine-tuned model, contour-based splitting is unreliable —
-        it either crops too aggressively (losing header/footer info) or
-        splits a single document into fragments.
+        在没有微调模型的情况下，基于轮廓的分割不可靠——
+        要么裁切过度（丢失页眉页脚信息），要么将单份文档错误分片。
 
-        MVP strategy: **always send the full page to the VLM** and let the
-        vision model handle document boundary understanding.  This avoids:
-        - P4-style splits (one doc fragmented into two records)
-        - P6-style partial crops (header with key info cut off)
-        - P2-style signature-only crops (irrelevant region extracted)
+        MVP 策略：**始终发送整页给 VLM**，让视觉模型自行理解文档边界。
+        这样可以避免：
+        - P4 型分片（单份文档被拆成两条记录）
+        - P6 型部分裁切（包含关键信息的页眉被切掉）
+        - P2 型签名页裁切（提取了无关区域）
 
-        When YOLO is fine-tuned, _detect_yolo will take over and provide
-        precise per-document bounding boxes.
+        当 YOLO 微调完成后，_detect_yolo 将接管并提供精确的单据边界框。
         """
         img_h, img_w = image.shape[:2]
         full_page = BoundingBox(x1=0, y1=0, x2=float(img_w), y2=float(img_h), confidence=1.0)

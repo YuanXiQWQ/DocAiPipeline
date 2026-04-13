@@ -1,4 +1,4 @@
-"""Rule-based validation and normalization for extracted fields."""
+"""基于规则的字段校验与规范化。"""
 
 from __future__ import annotations
 
@@ -10,14 +10,14 @@ from loguru import logger
 
 from app.schemas import CustomsField
 
-# Valid currency codes (extend as needed)
+# 有效币种代码（按需扩展）
 VALID_CURRENCIES: Set[str] = {
     "CNY", "USD", "EUR", "GBP", "JPY", "HRK", "KRW", "CAD", "AUD",
     "CHF", "SEK", "NOK", "DKK", "RUB", "INR", "BRL", "MXN", "HKD",
     "RSD",  # Serbian Dinar
 }
 
-# Map common currency symbols / local names to ISO codes
+# 常见币种符号 / 本地名称 → ISO 代码映射
 CURRENCY_ALIASES: dict[str, str] = {
     "€": "EUR", "$": "USD", "£": "GBP", "¥": "CNY",
     "元": "CNY", "人民币": "CNY",
@@ -25,7 +25,7 @@ CURRENCY_ALIASES: dict[str, str] = {
     "kuna": "HRK", "kn": "HRK",
 }
 
-# Date patterns to try for normalization
+# 日期规范化尝试的格式
 DATE_PATTERNS = [
     (r"\d{4}[-/\.]\d{1,2}[-/\.]\d{1,2}", "%Y-%m-%d"),
     (r"\d{1,2}[-/\.]\d{1,2}[-/\.]\d{4}", "%d-%m-%Y"),
@@ -34,10 +34,10 @@ DATE_PATTERNS = [
 
 
 class FieldValidator:
-    """Validates and normalizes extracted customs fields."""
+    """对抽取的单据字段进行校验和规范化。"""
 
     def validate(self, fields: List[CustomsField]) -> List[CustomsField]:
-        """Run all validation rules on the field list, returning updated fields."""
+        """对字段列表执行所有校验规则，返回更新后的字段。"""
         validated: List[CustomsField] = []
         for field in fields:
             field = self._validate_field(field)
@@ -51,7 +51,7 @@ class FieldValidator:
         if not value:
             return field
 
-        # Dispatch to specific validators
+        # 分发到具体的校验器
         if name == "currency":
             return self._validate_currency(field)
         elif name == "date":
@@ -66,16 +66,16 @@ class FieldValidator:
         return field
 
     # ------------------------------------------------------------------
-    # Specific validators
+    # 具体校验器
     # ------------------------------------------------------------------
 
     @staticmethod
     def _validate_currency(field: CustomsField) -> CustomsField:
-        """Check currency against whitelist, resolving symbols/aliases first."""
+        """将币种与白名单比对，先解析符号/别名。"""
         raw = field.value.strip()
         value_lower = raw.lower()
 
-        # Try alias lookup first (symbol → code, local name → code)
+        # 先尝试别名查找（符号 → 代码，本地名称 → 代码）
         if value_lower in CURRENCY_ALIASES:
             field.value = CURRENCY_ALIASES[value_lower]
             return field
@@ -91,9 +91,9 @@ class FieldValidator:
 
     @staticmethod
     def _validate_date(field: CustomsField) -> CustomsField:
-        """Normalize date to YYYY-MM-DD format."""
+        """将日期规范化为 YYYY-MM-DD 格式。"""
         raw = field.value.strip()
-        # Replace common separators
+        # 替换常见分隔符
         normalized = raw.replace("/", "-").replace(".", "-")
 
         for pattern, fmt in DATE_PATTERNS:
@@ -112,9 +112,9 @@ class FieldValidator:
 
     @staticmethod
     def _validate_amount(field: CustomsField) -> CustomsField:
-        """Validate monetary amounts — check for suspicious decimal points."""
+        """校验金额——检查可疑的小数点。"""
         raw = field.value.strip()
-        # Extract numeric part (may include currency prefix/suffix)
+        # 提取数字部分（可能包含币种前缀/后缀）
         numeric_match = re.search(r"[\d,]+\.?\d*", raw)
         if not numeric_match:
             field.needs_review = True
@@ -124,7 +124,7 @@ class FieldValidator:
         numeric_str = numeric_match.group().replace(",", "")
         try:
             amount = float(numeric_str)
-            # Flag suspiciously small or large amounts
+            # 标记可疑的过小或过大金额
             if amount < 0.01:
                 field.needs_review = True
                 field.review_reason = f"Amount suspiciously small: {amount}"
@@ -139,7 +139,7 @@ class FieldValidator:
 
     @staticmethod
     def _validate_numeric(field: CustomsField) -> CustomsField:
-        """Basic numeric validation for quantity/weight fields."""
+        """数量/重量字段的基本数值校验。"""
         raw = field.value.strip()
         numeric_match = re.search(r"[\d,]+\.?\d*", raw)
         if not numeric_match:
@@ -161,9 +161,9 @@ class FieldValidator:
 
     @staticmethod
     def _validate_tariff_code(field: CustomsField) -> CustomsField:
-        """HS/tariff codes are typically 6-10 digit numbers.  Allow comma-separated multiple codes."""
+        """HS/税则号通常是 6-10 位数字。支持逗号分隔的多个编码。"""
         raw = field.value.strip()
-        # Split on comma/semicolon for multiple codes
+        # 按逗号/分号拆分多个编码
         parts = re.split(r"[,;]\s*", raw)
         valid_parts: list[str] = []
         for part in parts:

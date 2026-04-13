@@ -1,4 +1,4 @@
-"""FastAPI application entry point."""
+"""FastAPI 应用入口点。"""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Lazily initialized pipeline (heavy model loading)
+# 懒加载管线（模型较重）
 _pipeline: Pipeline | None = None
 
 
@@ -32,7 +32,7 @@ def get_pipeline() -> Pipeline:
 
 
 # ------------------------------------------------------------------
-# Endpoints
+# 接口
 # ------------------------------------------------------------------
 
 
@@ -43,7 +43,7 @@ async def health_check():
 
 @app.post("/process", response_model=PipelineResult)
 async def process_document(file: UploadFile = File(...)):
-    """Upload a PDF/image and process through the full pipeline."""
+    """上传 PDF/图像并通过完整管线处理。"""
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
 
@@ -54,7 +54,7 @@ async def process_document(file: UploadFile = File(...)):
             detail=f"Unsupported file type: {suffix}. Accepted: PDF, JPG, PNG, TIFF",
         )
 
-    # Save uploaded file
+    # 保存上传文件
     settings.ensure_dirs()
     upload_id = uuid.uuid4().hex[:8]
     save_path = Path(settings.upload_dir) / f"{upload_id}_{file.filename}"
@@ -74,7 +74,7 @@ async def process_document(file: UploadFile = File(...)):
 
 @app.get("/download/{filename}")
 async def download_file(filename: str):
-    """Download an exported file (Excel/CSV/JSON)."""
+    """下载导出的文件（Excel/CSV/JSON）。"""
     file_path = Path(settings.output_dir) / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail=f"File not found: {filename}")
@@ -82,7 +82,7 @@ async def download_file(filename: str):
 
 
 # ------------------------------------------------------------------
-# Startup / Shutdown
+# 启动 / 关闭
 # ------------------------------------------------------------------
 
 

@@ -1,20 +1,19 @@
-"""Fill the '纸质发票记录表' Excel template with extracted pipeline data.
+"""纸质发票记录表 Excel 模板自动填充。
 
-Target template: 纸质发票记录表-20260303.xlsx
-Sheet: 原始汇总
-Columns to fill (A-L):
-  A: 所属人         — from config (fixed)
-  B: 公司名         — from config (fixed)
-  C: 供应商名称     — from exporter field
-  D: 性质           — '进口' for import docs
-  E: 名称           — derived from document_type / goods_description
-  F: 日期           — from date field
-  G: 发票号         — from invoice_number or declaration_number
-  H: 编号           — auto-generated internal reference
-  I: FSC            — '是' or '非' (from EUR.1 cert or default)
-  J: 供应商/备注    — formula =C{row} (auto)
-  K: 外币金额       — from total_value (numeric)
-  L: 数量           — from quantity (numeric, m³)
+目标模板：纸质发票记录表-20260303.xlsx、Sheet：原始汇总
+填充列 (A-L)：
+  A: 所属人         — 固定配置值
+  B: 公司名         — 固定配置值
+  C: 供应商名称     — 从出口商字段提取
+  D: 性质           — 进口单据默认“进口”
+  E: 名称           — 根据文档类型/货物描述推导
+  F: 日期           — 文档日期字段
+  G: 发票号         — 发票号或报关单号
+  H: 编号           — 自动生成的内部编号
+  I: FSC            — “是”或“非”（根据 EUR.1 证书判断）
+  J: 供应商/备注    — 公式 =C{row}（自动）
+  K: 外币金额       — 从 total_value 提取的数值
+  L: 数量           — 从 quantity 提取的数值 (m³)
 """
 
 from __future__ import annotations
@@ -32,7 +31,7 @@ from app.schemas import PipelineResult, CustomsRecord
 
 
 # ---------------------------------------------------------------------------
-# Config: default values for fixed columns
+# 配置：固定列的默认值
 # ---------------------------------------------------------------------------
 
 DEFAULT_OWNER = "新A"          # 所属人 — column A
@@ -42,7 +41,7 @@ DEFAULT_FSC = "非"             # FSC   — column I
 
 
 class InvoiceFiller:
-    """Fills the 纸质发票记录表 Excel template from pipeline results."""
+    """从管线处理结果填充纸质发票记录表 Excel 模板。"""
 
     def __init__(
         self,
@@ -65,29 +64,29 @@ class InvoiceFiller:
         output_path: str | Path,
         batch_id: Optional[str] = None,
     ) -> Path:
-        """Fill the template with data from one or more pipeline results.
+        """使用一个或多个管线结果填充模板。
 
-        Args:
-            results: List of PipelineResult from processing PDF files.
-            output_path: Where to save the filled Excel.
-            batch_id: Optional batch identifier prefix for internal ref numbers.
+        参数:
+            results: 处理 PDF 文件后的 PipelineResult 列表。
+            output_path: 填充后的 Excel 保存路径。
+            batch_id: 可选的批次标识前缀，用于内部编号生成。
 
-        Returns:
-            Path to the saved file.
+        返回:
+            保存的文件路径。
         """
         output_path = Path(output_path)
 
         wb = openpyxl.load_workbook(self.template_path)
         ws = wb[self.sheet_name]
 
-        # Find the first empty row (header is row 2, data starts at row 3)
+        # 找到第一个空行（表头在第 2 行，数据从第 3 行开始）
         start_row = self._find_first_empty_row(ws)
         logger.info(f"Template has data up to row {start_row - 1}. Appending from row {start_row}.")
 
         ref_counter = 0
-        has_fsc = False  # Track if any EUR.1 cert found in batch
+        has_fsc = False  # 跟踪批次中是否发现 EUR.1 证书
 
-        # First pass: check for EUR.1 certificates
+        # 第一轮：检查是否有 EUR.1 证书
         for result in results:
             for record in result.records:
                 doc_type = self._get_field(record, "document_type").lower()
@@ -95,14 +94,14 @@ class InvoiceFiller:
                     has_fsc = True
                     break
 
-        # Second pass: fill rows for relevant documents
+        # 第二轮：为相关单据填充行
         current_row = start_row
         for result in results:
             source_file = result.filename
             for record in result.records:
                 doc_type = self._get_field(record, "document_type").lower()
 
-                # Skip non-invoice documents (continuation pages, certificates used only for FSC)
+                # 跳过非发票类单据（续页、仅用于 FSC 判断的证书等）
                 if self._should_skip(doc_type):
                     logger.debug(f"Skipping {doc_type} from {source_file} (not billable)")
                     continue
@@ -124,13 +123,13 @@ class InvoiceFiller:
         return output_path
 
     # ------------------------------------------------------------------
-    # Mapping logic
+    # 映射逻辑
     # ------------------------------------------------------------------
 
     def _map_record_to_row(
         self, record: CustomsRecord, source_file: str, ref_num: str, has_fsc: bool
     ) -> dict:
-        """Map a CustomsRecord to a dict of column values."""
+        """将 CustomsRecord 映射为列值字典。"""
         doc_type = self._get_field(record, "document_type").lower()
         exporter = self._get_field(record, "exporter")
         date_str = self._get_field(record, "date")
@@ -141,23 +140,23 @@ class InvoiceFiller:
         currency = self._get_field(record, "currency")
         goods_desc = self._get_field(record, "goods_description")
 
-        # Determine 名称 (column E)
+        # 确定名称（E 列）
         item_name = self._derive_item_name(doc_type, goods_desc)
 
-        # Determine 发票号 (column G) — prefer invoice_number, fallback to declaration_number
+        # 确定发票号（G 列）— 优先使用 invoice_number，回退到 declaration_number
         bill_number = invoice_num if invoice_num else decl_num
 
-        # Determine FSC
+        # 确定 FSC
         fsc = "是" if has_fsc else DEFAULT_FSC
 
-        # Parse numeric values
+        # 解析数值
         amount = self._parse_european_number(total_value)
         qty = self._parse_european_number(quantity)
 
-        # Parse date
+        # 解析日期
         date_val = self._parse_date(date_str)
 
-        # Extract short supplier name
+        # 提取简短供应商名称
         supplier = self._extract_supplier_name(exporter)
 
         return {
@@ -177,7 +176,7 @@ class InvoiceFiller:
 
     @staticmethod
     def _should_skip(doc_type: str) -> bool:
-        """Determine if a document type should be skipped (not a billable item)."""
+        """判断该文档类型是否应跳过（非计费项目）。"""
         skip_types = [
             "eur.1", "eur1", "movement certificate",
             "inspection certificate", "phytosanitary",
@@ -187,38 +186,38 @@ class InvoiceFiller:
 
     @staticmethod
     def _derive_item_name(doc_type: str, goods_desc: str) -> str:
-        """Derive the 名称 column value from document type and goods description."""
+        """根据文档类型和货物描述推导「名称」列的值。"""
         goods_lower = goods_desc.lower()
 
-        # Transport / freight
+        # 运输/运费
         if any(w in doc_type for w in ["transport", "efaktura"]):
             return "运费"
         if any(w in goods_lower for w in ["prevoz", "transport", "运费", "运输"]):
             return "运费"
 
-        # Broker / customs service invoice
+        # 报关服务发票
         if any(w in goods_lower for w in ["špedicij", "spedicij", "usluga", "报关费", "obracun", "pdv za jci"]):
             return "报关费"
 
-        # Customs declaration → timber
+        # 报关单 → 原木
         if "customs" in doc_type or "declaration" in doc_type:
             return "原木"
 
-        # Wood / timber
+        # 木材/原木
         if any(w in goods_lower for w in ["trup", "drvo", "原木", "wood", "oak", "hrast", "furnir"]):
             return "原木"
 
-        return "原木"  # default
+        return "原木"  # 默认
 
     @staticmethod
     def _extract_supplier_name(exporter: str) -> str:
-        """Extract a short supplier name from the full exporter string."""
+        """从完整的出口商字符串中提取简短供应商名称。"""
         if not exporter:
             return ""
 
         name = exporter.strip()
 
-        # Known supplier mappings (long name → short)
+        # 已知供应商映射（长名称 → 短名称）
         supplier_map = {
             "HRVATSKE ŠUME": "HRVATSKE ŠUME",
             "PREMIUM": "PREMIUM",
@@ -229,14 +228,14 @@ class InvoiceFiller:
             if key.upper() in name_upper:
                 return short
 
-        # For transport companies, take first part before "PR "
+        # 对运输公司，取 "PR " 之前的部分
         if " PR " in name:
             # e.g. "MILENKO JANJATOVIĆ PR AUTOPREVOZ..." → "WOOD TRANS" if found
             if "WOOD TRANS" in name.upper():
                 return "WOOD TRANS MOROVIĆ"
             name = name[:name.index(" PR ")]
 
-        # Cut at address indicators
+        # 在地址标识处截断
         for sep in [", Nikol", ", NIKOL", ", Milke", ", MILKE", ", Morović",
                     ", Zagreb", ", ZAGREB", ", Požega", ", POŽEGA",
                     ", USP", ", UŠP", ", UŠĆE", ", Jarački"]:
@@ -248,37 +247,37 @@ class InvoiceFiller:
 
     @staticmethod
     def _parse_european_number(text: str) -> Optional[float]:
-        """Parse a European-format number (1.234,56) to float."""
+        """解析欧洲格式数字（1.234,56）为浮点数。"""
         if not text:
             return None
 
-        # Remove currency codes and units
+        # 移除币种代码和单位
         cleaned = re.sub(r"[A-Za-z³²%]+", "", text).strip()
-        # Remove spaces
+        # 移除空格
         cleaned = cleaned.replace(" ", "")
 
         if not cleaned:
             return None
 
-        # European format: 103.700,00 → 103700.00
+        # 欧洲格式：103.700,00 → 103700.00
         if "," in cleaned and "." in cleaned:
-            # Determine which is decimal separator
+            # 确定哪个是小数分隔符
             last_comma = cleaned.rfind(",")
             last_dot = cleaned.rfind(".")
             if last_comma > last_dot:
-                # Comma is decimal: 1.234,56
+                # 逗号是小数点：1.234,56
                 cleaned = cleaned.replace(".", "").replace(",", ".")
             else:
-                # Dot is decimal: 1,234.56
+                # 点是小数点：1,234.56
                 cleaned = cleaned.replace(",", "")
         elif "," in cleaned:
-            # Only comma: could be decimal (3,61) or thousands (1,000)
+            # 只有逗号：可能是小数 (3,61) 或千位分隔 (1,000)
             parts = cleaned.split(",")
             if len(parts) == 2 and len(parts[1]) <= 2:
                 cleaned = cleaned.replace(",", ".")
             else:
                 cleaned = cleaned.replace(",", "")
-        # else: only dots or no separator — standard format
+        # 其他情况：只有点或无分隔符 — 标准格式
 
         try:
             return float(cleaned)
@@ -287,7 +286,7 @@ class InvoiceFiller:
 
     @staticmethod
     def _parse_date(date_str: str) -> Optional[datetime]:
-        """Parse a date string to datetime."""
+        """解析日期字符串为 datetime。"""
         if not date_str:
             return None
 
@@ -296,14 +295,14 @@ class InvoiceFiller:
                 return datetime.strptime(date_str.strip(), fmt)
             except ValueError:
                 continue
-        return date_str  # fallback: return as string
+        return date_str  # 回退：以字符串形式返回
 
     @staticmethod
     def _generate_ref(batch_id: Optional[str], record: CustomsRecord, counter: int) -> str:
-        """Generate an internal reference number (编号 column H)."""
+        """生成内部编号（H 列）。"""
         if batch_id:
             return f"{batch_id}-{counter:03d}"
-        # Default: IM + date prefix + counter
+        # 默认：IM + 日期前缀 + 序号
         date_field = ""
         for f in record.fields:
             if f.field_name == "date" and f.value:
@@ -312,12 +311,12 @@ class InvoiceFiller:
         return f"IM{date_field}{counter:02d}"
 
     # ------------------------------------------------------------------
-    # Excel I/O helpers
+    # Excel 读写辅助方法
     # ------------------------------------------------------------------
 
     @staticmethod
     def _get_field(record: CustomsRecord, field_name: str) -> str:
-        """Get a field value from a record by name."""
+        """按名称获取记录中的字段值。"""
         for f in record.fields:
             if f.field_name == field_name:
                 return f.value
@@ -325,7 +324,7 @@ class InvoiceFiller:
 
     @staticmethod
     def _find_first_empty_row(ws, start: int = 3) -> int:
-        """Find the first empty row in column A starting from `start`."""
+        """从 `start` 开始找到 A 列的第一个空行。"""
         row = start
         while ws.cell(row=row, column=1).value is not None:
             row += 1
@@ -333,18 +332,18 @@ class InvoiceFiller:
 
     @staticmethod
     def _write_row(ws, row: int, data: dict):
-        """Write a row of data to the worksheet."""
+        """将一行数据写入工作表。"""
         col_map = {"A": 1, "B": 2, "C": 3, "D": 4, "E": 5, "F": 6,
                    "G": 7, "H": 8, "I": 9, "K": 11, "L": 12}
 
-        # Copy formatting from the row above if possible
+        # 尽可能复制上一行的格式
         src_row = row - 1 if row > 3 else 3
 
         for col_letter, col_idx in col_map.items():
             value = data.get(col_letter)
             cell = ws.cell(row=row, column=col_idx, value=value)
 
-            # Copy number format from source row
+            # 复制源行的数字格式
             src_cell = ws.cell(row=src_row, column=col_idx)
             if src_cell.number_format:
                 cell.number_format = src_cell.number_format

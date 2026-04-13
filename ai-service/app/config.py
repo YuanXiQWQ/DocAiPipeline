@@ -1,23 +1,23 @@
-"""Application configuration loaded from environment variables."""
+"""应用配置：从环境变量加载。"""
 
 from pathlib import Path
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # OpenAI / VLM
+    # OpenAI / VLM 模型配置
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
 
-    # YOLO
+    # YOLO 模型
     yolo_model_path: str = "models/yolo_customs_doc.pt"
 
-    # Server
+    # 服务器
     host: str = "0.0.0.0"
     port: int = 8000
     debug: bool = True
 
-    # Paths
+    # 路径
     output_dir: str = "output"
     upload_dir: str = "uploads"
 
@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     }
 
     def ensure_dirs(self) -> None:
-        """Create necessary directories if they don't exist."""
+        """确保必要的目录存在，不存在则创建。"""
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
         Path(self.upload_dir).mkdir(parents=True, exist_ok=True)
         Path(self.yolo_model_path).parent.mkdir(parents=True, exist_ok=True)
