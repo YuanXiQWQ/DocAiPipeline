@@ -170,12 +170,27 @@ async def fill_excel(
 def _do_fill(doc_type: str, results: list[dict], template: Path, output: Path) -> int:
     """执行填充，返回写入行数。"""
     from app.schemas import (
+        CustomsRecord,
         LogMeasurementResult,
         LogOutputResult,
         PackingResult,
+        PipelineResult,
         SlicingResult,
         SoakPoolResult,
     )
+
+    if doc_type == "customs":
+        from app.export.invoice_filler import InvoiceFiller
+        records = [CustomsRecord.model_validate(r) for r in results]
+        pr = PipelineResult(
+            filename="web_upload",
+            total_documents_detected=len(records),
+            records=records,
+            warnings=[],
+        )
+        filler_inv = InvoiceFiller(template)
+        filler_inv.fill([pr], output)
+        return len(records)
 
     if doc_type == "log_measurement":
         parsed = [LogMeasurementResult.model_validate(r) for r in results]

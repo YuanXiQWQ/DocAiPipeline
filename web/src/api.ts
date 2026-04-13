@@ -1,6 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-// 所有函数均为公共 API，供各页面按需引用
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 
 const api = axios.create({ baseURL: "/" });
 
@@ -58,6 +56,17 @@ export async function fillExcel(
 export async function healthCheck(): Promise<{ status: string }> {
   const { data } = await api.get("/health");
   return data;
+}
+
+/** 从 axios 错误中提取后端返回的详情信息 */
+export function extractErrorMessage(err: unknown): string {
+  if (err instanceof AxiosError && err.response?.data) {
+    const detail = err.response.data.detail;
+    if (typeof detail === "string") return detail;
+    if (typeof detail === "object") return JSON.stringify(detail);
+  }
+  if (err instanceof Error) return err.message;
+  return "未知错误";
 }
 
 /** 文档类型中文映射 */

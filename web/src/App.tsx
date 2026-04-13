@@ -17,6 +17,7 @@ import {
   processDocument,
   fillExcel,
   healthCheck,
+  extractErrorMessage,
   DOC_TYPE_LABELS,
   type ClassifyResult,
   type ProcessResult,
@@ -46,6 +47,8 @@ export default function App() {
   const [classifyInfo, setClassifyInfo] = useState<ClassifyResult | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [backendOk, setBackendOk] = useState<boolean | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
 
   useEffect(() => {
     healthCheck()
@@ -53,19 +56,29 @@ export default function App() {
       .catch(() => setBackendOk(false));
   }, []);
 
+  const selectFile = useCallback((f: File) => {
+    setFile(f);
+    if (f.type.startsWith("image/")) {
+      setPreview(URL.createObjectURL(f));
+    } else {
+      setPreview(null);
+    }
+  }, []);
+
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const f = e.target.files?.[0];
-      if (f) setFile(f);
+      if (f) selectFile(f);
     },
-    []
+    [selectFile]
   );
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    setDragging(false);
     const f = e.dataTransfer.files[0];
-    if (f) setFile(f);
-  }, []);
+    if (f) selectFile(f);
+  }, [selectFile]);
 
   const handleProcess = useCallback(async () => {
     if (!file) return;
@@ -82,9 +95,7 @@ export default function App() {
       setResult(res);
       setStep("review");
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "处理失败";
-      setError(msg);
+      setError(extractErrorMessage(err));
       setStep("upload");
     }
   }, [file, docType]);
@@ -102,9 +113,7 @@ export default function App() {
       setFillResult(res);
       setStep("done");
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "填充失败";
-      setError(msg);
+      setError(extractErrorMessage(err));
       setStep("review");
     }
   }, [result, templateFile]);
@@ -117,6 +126,7 @@ export default function App() {
     setError(null);
     setTemplateFile(null);
     setClassifyInfo(null);
+    setPreview(null);
   }, []);
 
   return (
@@ -245,9 +255,15 @@ export default function App() {
 
             {/* 文件上传区 */}
             <div
-              className="bg-white rounded-2xl shadow-sm border-2 border-dashed border-slate-300 hover:border-blue-400 transition-colors p-12 text-center cursor-pointer"
+              className={`bg-white rounded-2xl shadow-sm border-2 border-dashed transition-colors p-12 text-center cursor-pointer ${
+                dragging
+                  ? "border-blue-500 bg-blue-50"
+                  : "border-slate-300 hover:border-blue-400"
+              }`}
               onClick={() => inputRef.current?.click()}
               onDragOver={(e) => e.preventDefault()}
+              onDragEnter={() => setDragging(true)}
+              onDragLeave={() => setDragging(false)}
               onDrop={handleDrop}
             >
               <input
@@ -257,9 +273,9 @@ export default function App() {
                 className="hidden"
                 onChange={handleFileSelect}
               />
-              <Upload className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+              <Upload className={`w-12 h-12 mx-auto mb-4 ${dragging ? "text-blue-500" : "text-slate-400"}`} />
               <p className="text-slate-600 font-medium">
-                点击上传或拖放文件到此处
+                {dragging ? "松开以上传文件" : "点击上传或拖放文件到此处"}
               </p>
               <p className="text-sm text-slate-400 mt-2">
                 支持 PDF / JPG / PNG / TIFF
@@ -268,23 +284,35 @@ export default function App() {
 
             {/* 已选文件 */}
             {file && (
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <FileText className="w-8 h-8 text-blue-500" />
-                  <div>
-                    <p className="font-medium text-slate-800">{file.name}</p>
-                    <p className="text-sm text-slate-400">
-                      {(file.size / 1024).toFixed(1)} KB
-                    </p>
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <FileText className="w-8 h-8 text-blue-500" />
+                    <div>
+                      <p className="font-medium text-slate-800">{file.name}</p>
+                      <p className="text-sm text-slate-400">
+                        {(file.size / 1024).toFixed(1)} KB
+                      </p>
+                    </div>
                   </div>
+                  <button
+                    onClick={handleProcess}
+                    className="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
+                  >
+                    <Upload className="w-4 h-4" />
+                    开始识别
+                  </button>
                 </div>
-                <button
-                  onClick={handleProcess}
-                  className="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
-                >
-                  <Upload className="w-4 h-4" />
-                  开始识别
-                </button>
+                {/* 图片预览 */}
+                {preview && (
+                  <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden">
+                    <img
+                      src={preview}
+                      alt="预览"
+                      className="max-h-64 mx-auto object-contain"
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -370,14 +398,62 @@ export default function App() {
               </div>
             )}
 
-            {/* 数据预览 */}
+            {/* 数据预览 — 表格视图 */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
               <h3 className="font-medium text-slate-700 mb-3">数据预览</h3>
-              <div className="max-h-96 overflow-auto">
-                <pre className="text-xs text-slate-600 bg-slate-50 rounded-xl p-4 whitespace-pre-wrap">
-                  {JSON.stringify(result.results, null, 2).slice(0, 5000)}
-                  {JSON.stringify(result.results).length > 5000 && "\n..."}
-                </pre>
+              <div className="max-h-[32rem] overflow-auto">
+                {result.results.map((rec, ri) => {
+                  const entries = (rec.entries ?? rec.fields ?? []) as Record<string, unknown>[];
+                  if (!Array.isArray(entries) || entries.length === 0) {
+                    return (
+                      <details key={ri} className="mb-3">
+                        <summary className="text-sm font-medium text-slate-600 cursor-pointer">
+                          记录 {ri + 1}
+                        </summary>
+                        <pre className="text-xs bg-slate-50 rounded-lg p-3 mt-1 whitespace-pre-wrap">
+                          {JSON.stringify(rec, null, 2).slice(0, 2000)}
+                        </pre>
+                      </details>
+                    );
+                  }
+                  const cols = Object.keys(entries[0]).filter(
+                    (k) => k !== "needs_review" && k !== "review_reason"
+                  );
+                  return (
+                    <details key={ri} open={result.results.length === 1} className="mb-3">
+                      <summary className="text-sm font-medium text-slate-600 cursor-pointer">
+                        记录 {ri + 1} — {entries.length} 行
+                      </summary>
+                      <div className="overflow-x-auto mt-2">
+                        <table className="min-w-full text-xs border-collapse">
+                          <thead>
+                            <tr className="bg-slate-100">
+                              {cols.map((c) => (
+                                <th key={c} className="px-2 py-1 border border-slate-200 text-left font-medium text-slate-600 whitespace-nowrap">
+                                  {c}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {entries.slice(0, 50).map((row, rIdx) => (
+                              <tr key={rIdx} className={rIdx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                                {cols.map((c) => (
+                                  <td key={c} className="px-2 py-1 border border-slate-200 text-slate-700 whitespace-nowrap">
+                                    {String(row[c] ?? "")}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {entries.length > 50 && (
+                          <p className="text-xs text-slate-400 mt-1">… 还有 {entries.length - 50} 行</p>
+                        )}
+                      </div>
+                    </details>
+                  );
+                })}
               </div>
             </div>
 

@@ -113,9 +113,19 @@ def _save_upload(file: UploadFile) -> Path:
     return save_path
 
 
-def _pdf_to_images(pdf_path: Path, dpi: int = 300) -> list[np.ndarray]:
-    """将 PDF 转为 BGR numpy 数组列表。"""
-    doc = fitz.open(str(pdf_path))
+def _file_to_images(file_path: Path, dpi: int = 300) -> list[np.ndarray]:
+    """将 PDF 或图片文件转为 BGR numpy 数组列表。"""
+    suffix = file_path.suffix.lower()
+
+    # 图片文件直接读取
+    if suffix in (".jpg", ".jpeg", ".png", ".tiff", ".tif", ".bmp", ".webp"):
+        img = cv2.imread(str(file_path))
+        if img is None:
+            return []
+        return [img]
+
+    # PDF 逐页渲染
+    doc = fitz.open(str(file_path))
     images = []
     zoom = dpi / 72.0
     mat = fitz.Matrix(zoom, zoom)
@@ -202,9 +212,9 @@ def _classify_document(image: np.ndarray) -> ClassifyResponse:
 async def classify_document(file: UploadFile = File(...)):
     """上传 PDF/图片，VLM 自动判断文档类型。"""
     save_path = _save_upload(file)
-    images = _pdf_to_images(save_path)
+    images = _file_to_images(save_path)
     if not images:
-        raise HTTPException(400, "无法解析 PDF")
+        raise HTTPException(400, "无法解析文件")
     result = _classify_document(images[0])
     logger.info(f"分类: {file.filename} → {result.doc_type} ({result.confidence})")
     return result
@@ -222,9 +232,9 @@ async def process_document(
     """
     save_path = _save_upload(file)
     filename = file.filename or save_path.name
-    images = _pdf_to_images(save_path)
+    images = _file_to_images(save_path)
     if not images:
-        raise HTTPException(400, "无法解析 PDF")
+        raise HTTPException(400, "无法解析文件")
 
     # 自动分类
     actual_type = doc_type.value
