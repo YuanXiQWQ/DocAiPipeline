@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+// 所有函数均为公共 API，供各页面按需引用
 import axios from "axios";
 
 const api = axios.create({ baseURL: "/" });

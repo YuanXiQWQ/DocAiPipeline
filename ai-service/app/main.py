@@ -59,7 +59,7 @@ app = FastAPI(
 
 # CORS（允许前端跨域访问）
 app.add_middleware(
-    CORSMiddleware,
+    CORSMiddleware,  # type: ignore[arg-type]
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],

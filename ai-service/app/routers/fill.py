@@ -26,7 +26,6 @@ from app.export.factory_filler import (
     SlicingFiller,
     SoakPoolFiller,
 )
-from app.export.invoice_filler import InvoiceFiller
 from app.export.log_filler import LogFiller
 
 router = APIRouter(prefix="/api", tags=["填充"])
@@ -155,7 +154,6 @@ async def fill_excel(
     output_name = f"filled_{doc_type}_{uuid.uuid4().hex[:6]}.xlsx"
     output_path = output_dir / output_name
 
-    rows = 0
     try:
         rows = _do_fill(doc_type, results_data, template_path, output_path)
     except Exception as e:

@@ -5,7 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
-export default defineConfig([
+export default defineConfig(/** @type {any} */ ([
   globalIgnores(['dist']),
   {
     files: ['**/*.{ts,tsx}'],
@@ -20,4 +20,4 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
-])
+]))

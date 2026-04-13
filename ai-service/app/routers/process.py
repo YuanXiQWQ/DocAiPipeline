@@ -26,7 +26,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from app.config import settings
-from app.extraction import FactoryExtractor, LogExtractor, VLMExtractor
+from app.extraction import FactoryExtractor, LogExtractor
 from app.pipeline import Pipeline
 
 router = APIRouter(prefix="/api", tags=["处理"])
@@ -82,6 +82,7 @@ def _get_pipeline() -> Pipeline:
     global _pipeline
     if _pipeline is None:
         _pipeline = Pipeline()
+    assert _pipeline is not None
     return _pipeline
 
 
@@ -89,6 +90,7 @@ def _get_log_extractor() -> LogExtractor:
     global _log_extractor
     if _log_extractor is None:
         _log_extractor = LogExtractor()
+    assert _log_extractor is not None
     return _log_extractor
 
 
@@ -96,6 +98,7 @@ def _get_factory_extractor() -> FactoryExtractor:
     global _factory_extractor
     if _factory_extractor is None:
         _factory_extractor = FactoryExtractor()
+    assert _factory_extractor is not None
     return _factory_extractor
 
 
@@ -152,23 +155,28 @@ def _classify_document(image: np.ndarray) -> ClassifyResponse:
     import base64
     import json
 
+    from typing import cast
+
     from openai import OpenAI
+    from openai.types.chat import ChatCompletionMessageParam
 
     client = OpenAI(api_key=settings.openai_api_key)
     _, buf = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 85])
     b64 = base64.b64encode(buf.tobytes()).decode("utf-8")
 
+    messages = cast(list[ChatCompletionMessageParam], cast(object, [
+        {"role": "system", "content": CLASSIFY_PROMPT},
+        {"role": "user", "content": [
+            {"type": "text", "text": "Classify this document."},
+            {"type": "image_url", "image_url": {
+                "url": f"data:image/jpeg;base64,{b64}", "detail": "low",
+            }},
+        ]},
+    ]))
+
     response = client.chat.completions.create(
         model=settings.openai_model,
-        messages=[
-            {"role": "system", "content": CLASSIFY_PROMPT},
-            {"role": "user", "content": [
-                {"type": "text", "text": "Classify this document."},
-                {"type": "image_url", "image_url": {
-                    "url": f"data:image/jpeg;base64,{b64}", "detail": "low",
-                }},
-            ]},
-        ],
+        messages=messages,
         max_tokens=200,
         temperature=0.0,
     )
@@ -240,7 +248,7 @@ async def process_document(
             # Phase 2: 检尺单
             extractor = _get_log_extractor()
             for i, img in enumerate(images):
-                r = extractor.extract(img, filename=filename, page=i + 1)
+                r = extractor.extract_page(img, filename=filename, page=i + 1)
                 results.append(r.model_dump())
 
         elif actual_type in ("log_output", "soak_pool", "slicing", "packing"):

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import {
   Upload,
   FileText,
@@ -13,9 +13,12 @@ import {
   ClipboardList,
 } from "lucide-react";
 import {
+  classifyDocument,
   processDocument,
   fillExcel,
+  healthCheck,
   DOC_TYPE_LABELS,
+  type ClassifyResult,
   type ProcessResult,
   type FillResult,
 } from "./api";
@@ -40,7 +43,15 @@ export default function App() {
   const [fillResult, setFillResult] = useState<FillResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [templateFile, setTemplateFile] = useState<File | null>(null);
+  const [classifyInfo, setClassifyInfo] = useState<ClassifyResult | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [backendOk, setBackendOk] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    healthCheck()
+      .then(() => setBackendOk(true))
+      .catch(() => setBackendOk(false));
+  }, []);
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,7 +71,13 @@ export default function App() {
     if (!file) return;
     setStep("processing");
     setError(null);
+    setClassifyInfo(null);
     try {
+      // 自动模式下先调分类接口，显示分类结果
+      if (docType === "auto") {
+        const cls = await classifyDocument(file);
+        setClassifyInfo(cls);
+      }
       const res = await processDocument(file, docType);
       setResult(res);
       setStep("review");
@@ -99,6 +116,7 @@ export default function App() {
     setFillResult(null);
     setError(null);
     setTemplateFile(null);
+    setClassifyInfo(null);
   }, []);
 
   return (
@@ -115,9 +133,19 @@ export default function App() {
               v0.2
             </span>
           </div>
-          <p className="text-sm text-slate-500 hidden sm:block">
-            报关单自动识别与智能归档系统
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="text-sm text-slate-500 hidden sm:block">
+              报关单自动识别与智能归档系统
+            </p>
+            {backendOk !== null && (
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  backendOk ? "bg-emerald-500" : "bg-red-400"
+                }`}
+                title={backendOk ? "后端已连接" : "后端未连接"}
+              />
+            )}
+          </div>
         </div>
       </header>
 
@@ -278,6 +306,20 @@ export default function App() {
         {/* ===== 步骤 3: 复核 ===== */}
         {step === "review" && result && (
           <div className="space-y-6">
+            {/* 自动分类结果 */}
+            {classifyInfo && (
+              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-center gap-3">
+                {DOC_ICONS[classifyInfo.doc_type] || <FileText className="w-5 h-5" />}
+                <div className="text-left">
+                  <p className="text-sm font-medium text-blue-800">
+                    自动分类: {DOC_TYPE_LABELS[classifyInfo.doc_type] || classifyInfo.doc_type}
+                    <span className="ml-2 text-xs text-blue-500">({classifyInfo.confidence})</span>
+                  </p>
+                  <p className="text-xs text-blue-600">{classifyInfo.description}</p>
+                </div>
+              </div>
+            )}
+
             {/* 识别概览 */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
               <div className="flex items-center justify-between mb-4">
