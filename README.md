@@ -2,75 +2,103 @@
 
 简体中文 | [English](README_EN.md)
 
-> 基于多模态文档理解的报关单自动识别与智能归档系统
+> 基于多模态大模型 (VLM) 的文档自动识别与智能归档系统 — 覆盖原木进口→加工→打包全生命周期单据。
+
+## 功能概览
+
+| 文档类型           | 输入       | 输出           | 状态 |
+|----------------|----------|--------------|----|
+| 进口单据（报关/税款/发票） | PDF 扫描件  | 纸质发票记录表      | ✅  |
+| 原木检尺单          | PDF / 图片 | 原木出入库表       | ✅  |
+| 原木领用出库表        | PDF / 图片 | 原木出入库表（出库）   | ✅  |
+| 刨切木方入池表        | PDF / 图片 | 刨切入池与上机表     | ✅  |
+| 刨切木方上机表        | PDF / 图片 | 刨切入池与上机表（上机） | ✅  |
+| 表板打包报表         | PDF / 图片 | 表板统计表        | ✅  |
+
+**核心流程**：上传文档 → VLM 自动分类 → 结构化识别 → 人工复核 → Excel 自动填充 → 下载
 
 ## 项目结构
 
 ```
 DocAiPipeline/
-├── ai-service/              # Python AI 服务 (FastAPI)
+├── ai-service/                  # Python 后端 (FastAPI)
 │   ├── app/
-│   │   ├── preprocessing/   # PDF→图像、去噪、校正、对比度增强、锐化
-│   │   ├── detection/       # YOLO 单据检测（回退：整页模式）
-│   │   ├── extraction/      # VLM 端到端字段抽取 (gpt-4.1-mini)
-│   │   ├── validation/      # 规则校验（金额/币种/日期/HS编码等）
-│   │   ├── export/          # Excel/CSV/JSON 导出 + 纸质发票记录表自动填充
-│   │   ├── config.py        # 配置管理
-│   │   ├── schemas.py       # 数据模型
-│   │   ├── pipeline.py      # 管线编排
-│   │   └── main.py          # FastAPI 入口
+│   │   ├── routers/             # API 路由 (process, fill)
+│   │   ├── preprocessing/       # PDF→图像、去噪、校正、增强
+│   │   ├── detection/           # YOLO 单据检测
+│   │   ├── extraction/          # VLM 抽取器 (VLM/Log/Factory)
+│   │   ├── validation/          # 规则校验
+│   │   ├── export/              # Excel 填充器 (6种)
+│   │   ├── config.py            # 配置管理
+│   │   ├── schemas.py           # Pydantic 数据模型
+│   │   ├── pipeline.py          # 进口单据管线编排
+│   │   └── main.py              # FastAPI 入口
 │   ├── requirements.txt
 │   └── .env.example
-├── 文档/                     # 提案、样例数据、项目规划
-└── README.md
+├── web/                          # React 前端 (Vite + TS + TailwindCSS)
+│   ├── src/
+│   │   ├── App.tsx              # 主应用（上传→识别→复核→导出）
+│   │   └── api.ts               # API 服务层
+│   └── package.json
+├── docker-compose.yml            # 一键部署
+└── 文档/                         # 项目规划与样例数据
 ```
 
 ## 快速开始
 
-### 1. 安装依赖
+### 方式一：本地开发（推荐用于测试）
+
+**前置条件**：Python 3.11+、Node.js 18+、OpenAI API Key
 
 ```bash
+# 1. 后端
 cd ai-service
 pip install -r requirements.txt
+cp .env.example .env              # 编辑 .env，填入 OPENAI_API_KEY
+python -m app.main                # → http://localhost:8000
+
+# 2. 前端（新终端窗口）
+cd web
+npm install
+npm run dev                       # → http://localhost:5173
 ```
 
-### 2. 配置环境变量
+打开 `http://localhost:5173` 即可测试完整流程。
+
+### 方式二：Docker 一键部署
 
 ```bash
-cp .env.example .env
-# 编辑 .env，填入你的 OpenAI API Key
+# 创建 .env 文件
+echo "OPENAI_API_KEY=sk-your-key" > .env
+
+# 启动
+docker compose up --build
+
+# → 前端: http://localhost:3000
+# → 后端: http://localhost:8000
+# → API 文档: http://localhost:8000/docs
 ```
 
-### 3. 启动服务
+## API 接口
 
-```bash
-cd ai-service
-python -m app.main
-```
+| 方法     | 路径                          | 说明                   |
+|--------|-----------------------------|----------------------|
+| `GET`  | `/health`                   | 健康检查                 |
+| `POST` | `/api/classify`             | VLM 文档分类（6 种类型）      |
+| `POST` | `/api/process`              | 统一文档处理（自动/手动分类 → 识别） |
+| `POST` | `/api/fill`                 | 识别结果 → Excel 自动填充    |
+| `GET`  | `/api/templates`            | 列出已上传的 Excel 模板      |
+| `POST` | `/api/templates/{doc_type}` | 上传 Excel 模板          |
+| `GET`  | `/api/download/{filename}`  | 下载填充后的文件             |
 
-服务将在 `http://localhost:8000` 启动。
-
-### 4. API 使用
-
-- **健康检查**: `GET /health`
-- **处理文档**: `POST /process` （上传 PDF 文件）
-- **下载结果**: `GET /download/{filename}`
-
-API 文档: `http://localhost:8000/docs`
-
-## 处理管线
-
-```
-PDF 输入 → 预处理(去噪/纠偏/增强/锐化) → YOLO 单据检测 → VLM 字段抽取 → 规则校验 → 导出
-                                                                                    ↓
-                                                              Excel/CSV/JSON + 纸质发票记录表自动填充
-```
+完整 API 文档：启动后端后访问 `http://localhost:8000/docs`
 
 ## 技术栈
 
-- **AI 服务**: Python, FastAPI, OpenCV, PyMuPDF, Ultralytics YOLO, OpenAI VLM (gpt-4.1-mini)
-- **Excel 处理**: openpyxl（保留公式与格式）
-- **前端**: React Web 复核界面（后续）
+- **AI 后端**：Python, FastAPI, OpenCV, PyMuPDF, Ultralytics YOLO, OpenAI VLM (gpt-4.1-mini)
+- **Excel 引擎**：openpyxl（保留公式、格式与数据透视表）
+- **Web 前端**：React 19, TypeScript, Vite, TailwindCSS v4, Lucide Icons
+- **部署**：Docker Compose（Nginx 反代 + Python 后端）
 
 ## 许可证
 

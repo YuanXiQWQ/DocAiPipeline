@@ -1,0 +1,22 @@
+services:
+  backend:
+    build: ./ai-service
+    ports:
+      - "8000:8000"
+    env_file: .env
+    volumes:
+      - backend-output:/app/output
+      - backend-uploads:/app/uploads
+    restart: unless-stopped
+
+  frontend:
+    build: ./web
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend-output:
+  backend-uploads:
