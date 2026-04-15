@@ -17,19 +17,19 @@ from loguru import logger
 from app.schemas import LogEntry, LogMeasurementResult, LogSheetMeta
 
 # ------------------------------------------------------------------
-# Monkey-patch: 修复 openpyxl 透视表 CalculatedItem.formula 必须为 str 的 bug
+# Monkey-patch: openpyxl 透视表兼容性补丁
 # ------------------------------------------------------------------
 
 def _patch_openpyxl_pivot_cache() -> None:
-    """修复 openpyxl 透视表加载问题。
+    """openpyxl 透视表加载兼容补丁。
 
-    1. 让 CalculatedItem.formula 接受 None，避免 TypeError。
-    2. 跳过 pivot_caches 解析，避免读取巨大的缓存文件导致卡住。
+    1. CalculatedItem.formula 允许 None，防止 TypeError。
+    2. 跳过 pivot_caches 解析，避免读取巨大缓存文件导致卡住。
     """
     try:
         from openpyxl.pivot.cache import CalculatedItem
         from openpyxl.descriptors.base import String
-        # 将 formula 改为 allow_none=True
+        # formula 字段允许 None
         CalculatedItem.formula = String(allow_none=True)  # type: ignore[assignment]
     except (ImportError, AttributeError):
         pass  # 如果 openpyxl 版本不同，跳过

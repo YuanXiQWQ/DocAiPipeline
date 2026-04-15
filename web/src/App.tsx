@@ -36,7 +36,7 @@ import {
 /* 文档类型图标映射 */
 const DOC_ICONS: Record<string, React.ReactNode> = {
   customs: <Truck className="w-5 h-5" />,
-  log_measurement: <TreePine className="w-5 h-5" />,  // 原木检尺单用树图标合适
+  log_measurement: <TreePine className="w-5 h-5" />,
   log_output: <ClipboardList className="w-5 h-5" />,
   soak_pool: <Package className="w-5 h-5" />,
   slicing: <Scissors className="w-5 h-5" />,
