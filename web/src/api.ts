@@ -254,7 +254,8 @@ export interface BatchProgressEvent {
     index: number;
     total: number;
     filename: string;
-    status: "processing";
+    percent: number;
+    stage: string;
 }
 
 export interface BatchResultEvent {
@@ -301,6 +302,7 @@ export function processBatch(
             const response = await fetch("/api/process-batch", {
                 method: "POST",
                 body: fd,
+                headers: {"Accept": "text/event-stream"},
                 signal: controller.signal,
             });
             if (!response.ok || !response.body) {
@@ -324,13 +326,15 @@ export function processBatch(
                 let currentEvent = "";
                 let currentData = "";
                 for (const line of lines) {
-                    if (line.startsWith("event:")) {
-                        currentEvent = line.slice(6).trim();
-                    } else if (line.startsWith("data:")) {
-                        currentData = line.slice(5).trim();
-                    } else if (line === "" && currentEvent && currentData) {
+                    const trimmed = line.replace(/\r$/, "");
+                    if (trimmed.startsWith("event:")) {
+                        currentEvent = trimmed.slice(6).trim();
+                    } else if (trimmed.startsWith("data:")) {
+                        currentData = trimmed.slice(5).trim();
+                    } else if (trimmed === "" && currentEvent && currentData) {
                         try {
                             const parsed = JSON.parse(currentData);
+                            console.log("[SSE]", currentEvent, parsed);
                             if (currentEvent === "progress") callbacks.onProgress?.(parsed);
                             else if (currentEvent === "result") callbacks.onResult?.(parsed);
                             else if (currentEvent === "error") callbacks.onError?.(parsed);

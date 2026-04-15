@@ -4,6 +4,7 @@ import {
     AlertCircle,
     BarChart3,
     CheckCircle,
+    Circle,
     ClipboardList,
     Clock,
     Download,
@@ -11,12 +12,15 @@ import {
     Home,
     Loader2,
     Package,
+    Pause,
+    Play,
     ScanLine,
     Scissors,
     Settings,
     TreePine,
     Truck,
     Upload,
+    X,
 } from "lucide-react";
 import {useT} from "./i18n";
 import SettingsPanel from "./SettingsPanel";
@@ -26,7 +30,6 @@ import {
     type BatchErrorEvent,
     type BatchProgressEvent,
     type BatchResultEvent,
-    classifyDocument,
     type ClassifyResult,
     DOC_TYPE_KEYS,
     extractErrorMessage,
@@ -35,7 +38,6 @@ import {
     getSettings,
     healthCheck,
     processBatch,
-    processDocument,
     type ProcessResult,
 } from "./api";
 
@@ -53,11 +55,13 @@ const DOC_ICONS: Record<string, React.ReactNode> = {
 type View = "upload" | "review" | "filling" | "done";
 
 /* 每个文件的处理状态 */
-type FileStatus = "waiting" | "processing" | "success" | "error";
+type FileStatus = "waiting" | "processing" | "paused" | "success" | "error";
 
 interface FileEntry {
     file: File;
     status: FileStatus;
+    progress: number;
+    progressStage: string;
     error?: string;
     result?: ProcessResult;
     classifyInfo?: ClassifyResult;
@@ -89,7 +93,7 @@ export default function App() {
     const batchAbortRef = useRef<{ abort: () => void } | null>(null);
 
     /* 派生状态 */
-    const isProcessing = files.some(f => f.status === "processing" || f.status === "waiting" && files.some(g => g.status === "processing"));
+    const isProcessing = files.some(f => f.status === "processing");
     const selectedFile = selectedFileIndex >= 0 ? files[selectedFileIndex] : null;
     const selectedResult = selectedFile?.result ?? null;
 
@@ -112,7 +116,7 @@ export default function App() {
         const arr = Array.from(newFiles);
         setFiles(prev => [
             ...prev,
-            ...arr.map(f => ({file: f, status: "waiting" as FileStatus})),
+            ...arr.map(f => ({file: f, status: "waiting" as FileStatus, progress: 0, progressStage: ""})),
         ]);
         // 预览第一张图片
         const first = arr[0];
@@ -141,68 +145,60 @@ export default function App() {
     /* 开始处理：只处理 waiting 状态的文件，不影响已完成的 */
     const handleProcess = useCallback(() => {
         const pendingIndices = files
-            .map((f, i) => f.status === "waiting" ? i : -1)
+            .map((f, i) => (f.status === "waiting" || f.status === "paused") ? i : -1)
             .filter(i => i >= 0);
         if (pendingIndices.length === 0) return;
 
         setError(null);
 
-        // 重置待处理文件状态
+        // 标记为 processing（paused 文件保留已有进度，waiting 从零开始）
         setFiles(prev => prev.map((f, i) =>
             pendingIndices.includes(i)
-                ? {...f, status: "waiting" as FileStatus, error: undefined, result: undefined, classifyInfo: undefined}
+                ? {
+                    ...f,
+                    status: "processing" as FileStatus,
+                    progress: f.status === "paused" ? f.progress : 0,
+                    progressStage: f.status === "paused" ? f.progressStage : "",
+                    error: undefined,
+                    result: undefined,
+                    classifyInfo: undefined,
+                }
                 : f
         ));
 
         const rawFiles = pendingIndices.map(i => files[i].file);
 
-        // 单文件走原有路径
-        if (rawFiles.length === 1) {
-            const idx = pendingIndices[0];
-            (async () => {
-                setFiles(prev => prev.map((f, i) => i === idx ? {...f, status: "processing"} : f));
-                try {
-                    let cls: ClassifyResult | undefined;
-                    if (docType === "auto") {
-                        cls = await classifyDocument(rawFiles[0]);
-                    }
-                    const res = await processDocument(rawFiles[0], docType);
-                    setFiles(prev => prev.map((f, i) => i === idx ? {
-                        ...f,
-                        status: "success",
-                        result: res,
-                        classifyInfo: cls
-                    } : f));
-                    // 自动跳转到该文件的复核视图
-                    setSelectedFileIndex(idx);
-                    setView("review");
-                } catch (err: unknown) {
-                    setFiles(prev => prev.map((f, i) => i === idx ? {
-                        ...f,
-                        status: "error",
-                        error: extractErrorMessage(err)
-                    } : f));
-                }
-            })();
-            return;
-        }
-
-        // 多文件走 SSE 批量处理
+        // 统一走 SSE 批量处理
         batchAbortRef.current = processBatch(rawFiles, docType, {
             onProgress: (e: BatchProgressEvent) => {
                 const fileIdx = pendingIndices[e.index];
-                setFiles(prev => prev.map((f, i) => i === fileIdx ? {...f, status: "processing"} : f));
+                setFiles(prev => prev.map((f, i) => i === fileIdx ? {
+                    ...f,
+                    status: "processing",
+                    progress: e.percent,
+                    progressStage: e.stage,
+                } : f));
             },
             onResult: (e: BatchResultEvent) => {
                 const fileIdx = pendingIndices[e.index];
-                setFiles(prev => prev.map((f, i) => i === fileIdx ? {...f, status: "success", result: e.data} : f));
+                setFiles(prev => prev.map((f, i) => i === fileIdx ? {
+                    ...f,
+                    status: "success",
+                    progress: 100,
+                    progressStage: "",
+                    result: e.data,
+                } : f));
             },
             onError: (e: BatchErrorEvent) => {
                 const fileIdx = pendingIndices[e.index];
-                setFiles(prev => prev.map((f, i) => i === fileIdx ? {...f, status: "error", error: e.error} : f));
+                setFiles(prev => prev.map((f, i) => i === fileIdx ? {
+                    ...f,
+                    status: "error",
+                    error: e.error,
+                } : f));
             },
             onDone: () => {
-                // 如果用户还在 upload 视图，自动跳转到第一个成功文件的复核
+                batchAbortRef.current = null;
                 setFiles(prev => {
                     const firstSuccessIdx = prev.findIndex(f => f.status === "success" && f.result);
                     if (firstSuccessIdx >= 0) {
@@ -214,6 +210,17 @@ export default function App() {
             },
         });
     }, [files, docType]);
+
+    /* 中断全部处理 */
+    const handleAbortAll = useCallback(() => {
+        if (batchAbortRef.current) {
+            batchAbortRef.current.abort();
+            batchAbortRef.current = null;
+        }
+        setFiles(prev => prev.map(f =>
+            f.status === "processing" ? {...f, status: "paused" as FileStatus, progressStage: "已暂停"} : f
+        ));
+    }, []);
 
     const handleFill = useCallback(async () => {
         if (!selectedResult) return;
@@ -289,6 +296,8 @@ export default function App() {
         const fakeEntry: FileEntry = {
             file: new File([], detail.filename),
             status: "success",
+            progress: 100,
+            progressStage: "",
             result: fakeResult,
         };
         setFiles(prev => {
@@ -386,6 +395,7 @@ export default function App() {
                             handleFileSelect={handleFileSelect}
                             handleDrop={handleDrop}
                             handleProcess={handleProcess}
+                            handleAbortAll={handleAbortAll}
                             handleFill={handleFill}
                             handleReset={handleReset}
                             handleGoHome={handleGoHome}
@@ -409,7 +419,7 @@ function ProcessingFlow({
                             fillResult, error, setTemplateFile,
                             inputRef, dragging, setDragging, preview,
                             needsSetup, handleFileSelect, handleDrop,
-                            handleProcess, handleFill, handleReset, handleGoHome,
+                            handleProcess, handleAbortAll, handleFill, handleReset, handleGoHome,
                         }: {
     t: (key: string) => string;
     view: View;
@@ -432,19 +442,15 @@ function ProcessingFlow({
     handleFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleDrop: (e: React.DragEvent) => void;
     handleProcess: () => void;
+    handleAbortAll: () => void;
     handleFill: () => void;
     handleReset: () => void;
     handleGoHome: () => void;
 }) {
-    const statusColor: Record<FileStatus, string> = {
-        waiting: "bg-slate-300",
-        processing: "bg-blue-500 animate-pulse",
-        success: "bg-emerald-500",
-        error: "bg-red-500",
-    };
     const statusLabel: Record<FileStatus, string> = {
         waiting: t("upload.file_waiting"),
         processing: t("upload.file_processing"),
+        paused: t("upload.file_paused"),
         success: t("upload.file_success"),
         error: t("upload.file_error"),
     };
@@ -459,7 +465,7 @@ function ProcessingFlow({
         ["done", t("step.done")],
     ];
     const successCount = files.filter(f => f.status === "success").length;
-    const hasWaiting = files.some(f => f.status === "waiting");
+    const hasWaiting = files.some(f => f.status === "waiting" || f.status === "paused");
 
     return (
         <>
@@ -590,14 +596,22 @@ function ProcessingFlow({
                                     )}
                                 </p>
                                 <div className="flex gap-2">
-                                    {hasWaiting && (
+                                    {hasWaiting && !isProcessing && (
                                         <button
                                             onClick={handleProcess}
-                                            disabled={isProcessing}
-                                            className="px-5 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium flex items-center gap-2 text-sm"
+                                            className="px-5 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 text-sm"
                                         >
-                                            <Upload className="w-4 h-4"/>
+                                            <Play className="w-4 h-4"/>
                                             {t("upload.start")}
+                                        </button>
+                                    )}
+                                    {isProcessing && (
+                                        <button
+                                            onClick={handleAbortAll}
+                                            className="px-5 py-2 bg-amber-500 text-white rounded-xl hover:bg-amber-600 transition-colors font-medium flex items-center gap-2 text-sm"
+                                        >
+                                            <Pause className="w-4 h-4"/>
+                                            {t("upload.pause")}
                                         </button>
                                     )}
                                     {files.length > 0 && !isProcessing && (
@@ -610,53 +624,113 @@ function ProcessingFlow({
                                     )}
                                 </div>
                             </div>
-                            <div className="space-y-1 max-h-96 overflow-auto">
+                            <div className="divide-y divide-slate-100 max-h-96 overflow-auto">
                                 {files.map((entry, idx) => (
-                                    <div
-                                        key={idx}
-                                        className={`flex items-center gap-3 p-2.5 rounded-lg transition-colors ${
-                                            entry.status === "success"
-                                                ? "hover:bg-emerald-50 cursor-pointer"
-                                                : "hover:bg-slate-50"
-                                        } ${selectedFileIndex === idx ? "ring-2 ring-blue-400 bg-blue-50" : ""}`}
-                                        onClick={() => entry.status === "success" && handleSelectFile(idx)}
+                                    <div key={idx}
+                                         className={`transition-colors ${
+                                             entry.status === "success"
+                                                 ? "hover:bg-emerald-50 cursor-pointer"
+                                                 : "hover:bg-slate-50"
+                                         } ${selectedFileIndex === idx ? "ring-2 ring-blue-400 bg-blue-50" : ""}`}
+                                         onClick={() => entry.status === "success" && handleSelectFile(idx)}
                                     >
-                                        <div
-                                            className={`w-2.5 h-2.5 rounded-full shrink-0 ${statusColor[entry.status]}`}/>
-                                        <FileText className={`w-5 h-5 shrink-0 ${
-                                            entry.status === "success" ? "text-emerald-500" :
-                                                entry.status === "error" ? "text-red-400" :
-                                                    entry.status === "processing" ? "text-blue-500" : "text-slate-400"
-                                        }`}/>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium text-slate-800 truncate">{entry.file.name}</p>
-                                            <p className="text-xs text-slate-400">
-                                                {(entry.file.size / 1024).toFixed(1)} KB
-                                                {entry.result && (
-                                                    <span className="ml-2 text-emerald-600">
-                                                        {DOC_TYPE_KEYS[entry.result.doc_type] ? t(DOC_TYPE_KEYS[entry.result.doc_type]) : entry.result.doc_type}
-                                                    </span>
+                                        <div className="flex items-center gap-3 px-3 py-2.5">
+                                            {/* 状态图标 */}
+                                            {entry.status === "processing" ? (
+                                                <Loader2 className="w-4 h-4 shrink-0 text-blue-500 animate-spin"/>
+                                            ) : entry.status === "success" ? (
+                                                <CheckCircle className="w-4 h-4 shrink-0 text-emerald-500"/>
+                                            ) : entry.status === "error" ? (
+                                                <AlertCircle className="w-4 h-4 shrink-0 text-red-400"/>
+                                            ) : entry.status === "paused" ? (
+                                                <Pause className="w-4 h-4 shrink-0 text-amber-500"/>
+                                            ) : (
+                                                <Circle className="w-4 h-4 shrink-0 text-slate-300"/>
+                                            )}
+                                            {/* 文件信息 */}
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-medium text-slate-800 truncate">{entry.file.name}</p>
+                                                <p className="text-xs text-slate-400">
+                                                    {(entry.file.size / 1024).toFixed(1)} KB
+                                                    {entry.progressStage && (
+                                                        <span
+                                                            className="ml-2 text-blue-500">{entry.progressStage}</span>
+                                                    )}
+                                                    {entry.result && (
+                                                        <span className="ml-2 text-emerald-600">
+                                                            {DOC_TYPE_KEYS[entry.result.doc_type] ? t(DOC_TYPE_KEYS[entry.result.doc_type]) : entry.result.doc_type}
+                                                        </span>
+                                                    )}
+                                                </p>
+                                            </div>
+                                            {/* 百分比 */}
+                                            {(entry.status === "processing" || entry.status === "paused") && (
+                                                <span
+                                                    className="text-xs font-mono text-blue-600 w-10 text-right shrink-0">
+                                                    {entry.progress}%
+                                                </span>
+                                            )}
+                                            {/* 状态标签 */}
+                                            {(entry.status === "success" || entry.status === "error") && (
+                                                <span className={`text-xs font-medium whitespace-nowrap ${
+                                                    entry.status === "success" ? "text-emerald-600" : "text-red-600"
+                                                }`}>
+                                                    {entry.status === "error" && entry.error
+                                                        ? entry.error.slice(0, 30)
+                                                        : statusLabel[entry.status]
+                                                    }
+                                                </span>
+                                            )}
+                                            {/* 操作按钮 */}
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                {entry.status === "processing" && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleAbortAll();
+                                                        }}
+                                                        className="p-1 text-slate-400 hover:text-amber-500 transition-colors"
+                                                        title={t("upload.pause")}
+                                                    >
+                                                        <Pause className="w-3.5 h-3.5"/>
+                                                    </button>
                                                 )}
-                                            </p>
+                                                {entry.status === "paused" && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleProcess();
+                                                        }}
+                                                        className="p-1 text-slate-400 hover:text-emerald-500 transition-colors"
+                                                        title={t("upload.resume")}
+                                                    >
+                                                        <Play className="w-3.5 h-3.5"/>
+                                                    </button>
+                                                )}
+                                                {(entry.status === "waiting" || entry.status === "paused" || entry.status === "error") && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            removeFile(idx);
+                                                        }}
+                                                        className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                                                        title={t("upload.remove")}
+                                                    >
+                                                        <X className="w-3.5 h-3.5"/>
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
-                                        <span className={`text-xs font-medium whitespace-nowrap ${
-                                            entry.status === "success" ? "text-emerald-600" :
-                                                entry.status === "error" ? "text-red-600" :
-                                                    entry.status === "processing" ? "text-blue-600" : "text-slate-400"
-                                        }`}>
-                                            {entry.status === "error" && entry.error
-                                                ? entry.error.slice(0, 30)
-                                                : statusLabel[entry.status]
-                                            }
-                                        </span>
-                                        {entry.status === "waiting" && !isProcessing && (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    removeFile(idx);
-                                                }}
-                                                className="text-slate-400 hover:text-red-500 transition-colors text-lg leading-none px-1"
-                                            >&times;</button>
+                                        {/* 真实进度条 */}
+                                        {(entry.status === "processing" || entry.status === "paused") && (
+                                            <div className="h-1 bg-slate-100">
+                                                <div
+                                                    className={`h-full transition-all duration-500 ${
+                                                        entry.status === "paused" ? "bg-amber-400" : "bg-blue-500"
+                                                    }`}
+                                                    style={{width: `${entry.progress}%`}}
+                                                />
+                                            </div>
                                         )}
                                     </div>
                                 ))}
@@ -799,6 +873,53 @@ function ProcessingFlow({
                                         </details>
                                     );
                                 }
+                                /* 字段列表格式：[{field_name, value, ...}] → 双列表格 */
+                                const isFieldList = entries.length > 0 && "field_name" in entries[0] && "value" in entries[0];
+
+                                if (isFieldList) {
+                                    return (
+                                        <details key={ri} open={selectedResult.results.length === 1} className="mb-3">
+                                            <summary className="text-sm font-medium text-slate-600 cursor-pointer">
+                                                {t("review.record")} {ri + 1}
+                                            </summary>
+                                            {cropUrl && (
+                                                <div
+                                                    className="mt-2 mb-3 border border-slate-200 rounded-lg overflow-hidden">
+                                                    <p className="text-xs text-slate-500 bg-slate-50 px-3 py-1 border-b border-slate-200">
+                                                        {t("review.crop_hint")}
+                                                    </p>
+                                                    <a href={cropUrl} target="_blank" rel="noopener noreferrer">
+                                                        <img src={cropUrl} alt={`${t("review.record")} ${ri + 1}`}
+                                                             className="w-full object-contain max-h-72 cursor-zoom-in"/>
+                                                    </a>
+                                                </div>
+                                            )}
+                                            <div className="overflow-x-auto mt-2 border border-slate-200 rounded-lg">
+                                                <table className="min-w-full text-sm">
+                                                    <thead>
+                                                    <tr className="bg-slate-100">
+                                                        <th className="px-3 py-2 text-left font-medium text-slate-600 border-b border-slate-200 w-1/3">{t("history.field_name")}</th>
+                                                        <th className="px-3 py-2 text-left font-medium text-slate-600 border-b border-slate-200">{t("history.field_value")}</th>
+                                                    </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                    {entries.map((f, fi) => (
+                                                        <tr key={fi}
+                                                            className={fi % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                                                            <td className="px-3 py-1.5 border-b border-slate-100 text-slate-500 text-xs">
+                                                                {t(`field.${f.field_name}`) !== `field.${f.field_name}` ? `${t(`field.${f.field_name}`)} (${f.field_name})` : String(f.field_name ?? "")}
+                                                            </td>
+                                                            <td className="px-3 py-1.5 border-b border-slate-100 text-slate-900">{String(f.value ?? "—")}</td>
+                                                        </tr>
+                                                    ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </details>
+                                    );
+                                }
+
+                                /* 表格行格式：[{col1, col2, ...}] → 多列表格 */
                                 const cols = Object.keys(entries[0]).filter(
                                     (k) => k !== "needs_review" && k !== "review_reason"
                                 );
@@ -825,7 +946,7 @@ function ProcessingFlow({
                                                 <tr className="bg-slate-100">
                                                     {cols.map((c) => (
                                                         <th key={c}
-                                                            className="px-2 py-1 border border-slate-200 text-left font-medium text-slate-600 whitespace-nowrap">{c}</th>
+                                                            className="px-2 py-1 border border-slate-200 text-left font-medium text-slate-600 whitespace-nowrap">{t(`field.${c}`) !== `field.${c}` ? `${t(`field.${c}`)} (${c})` : c}</th>
                                                     ))}
                                                 </tr>
                                                 </thead>

@@ -18,7 +18,7 @@ import shutil
 import uuid
 from enum import Enum
 from pathlib import Path
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Callable
 
 import cv2
 import fitz
@@ -143,14 +143,12 @@ def _file_to_images(file_path: Path, dpi: int = 300, preprocess: bool = True) ->
     suffix = file_path.suffix.lower()
     raw_images: list[np.ndarray] = []
 
-    # 图片文件直接读取
     if suffix in (".jpg", ".jpeg", ".png", ".tiff", ".tif", ".bmp", ".webp"):
         img = cv2.imread(str(file_path))
         if img is None:
             return []
         raw_images = [img]
     else:
-        # PDF 逐页渲染
         doc = fitz.open(str(file_path))
         zoom = dpi / 72.0
         mat = fitz.Matrix(zoom, zoom)
@@ -164,7 +162,6 @@ def _file_to_images(file_path: Path, dpi: int = 300, preprocess: bool = True) ->
             raw_images.append(img)
         doc.close()
 
-    # 预处理（去噪、纠偏、对比度增强、锐化）
     if preprocess and raw_images:
         processed = []
         for img in raw_images:
@@ -172,6 +169,10 @@ def _file_to_images(file_path: Path, dpi: int = 300, preprocess: bool = True) ->
         return processed
 
     return raw_images
+
+
+# 进度回调类型：(percent: int, stage: str) -> None
+ProgressCallback = Callable[[int, str], None]
 
 
 # ------------------------------------------------------------------
@@ -203,6 +204,7 @@ def _classify_document(image: np.ndarray) -> ClassifyResponse:
     from openai import OpenAI
     from openai.types.chat import ChatCompletionMessageParam
 
+    logger.info("VLM 文档分类中…")
     client = OpenAI(
         api_key=settings.openai_api_key,
         **({"base_url": settings.openai_base_url} if settings.openai_base_url else {}),
@@ -227,7 +229,6 @@ def _classify_document(image: np.ndarray) -> ClassifyResponse:
         temperature=0.0,
     )
     raw = response.choices[0].message.content or "{}"
-    # 清理 markdown 围栏
     if "```" in raw:
         raw = raw.split("```")[1]
         if raw.startswith("json"):
@@ -235,7 +236,7 @@ def _classify_document(image: np.ndarray) -> ClassifyResponse:
     try:
         data = json.loads(raw.strip())
     except json.JSONDecodeError:
-        data = {"doc_type": "customs", "confidence": "low", "description": "parse failed"}
+        data = {"doc_type": "customs", "confidence": "low", "description": "解析失败"}
     return ClassifyResponse(**data)
 
 
@@ -252,7 +253,7 @@ async def classify_document(file: UploadFile = File(...)):
     if not images:
         raise HTTPException(400, "无法解析文件")
     result = _classify_document(images[0])
-    logger.info(f"分类: {file.filename} → {result.doc_type} ({result.confidence})")
+    logger.info(f"文档分类: {file.filename} → {result.doc_type} (置信度: {result.confidence})")
     return result
 
 
@@ -350,18 +351,33 @@ def _process_single_file(
     filename: str,
     doc_type_str: str,
     images: list[np.ndarray],
+    progress_cb: ProgressCallback | None = None,
 ) -> ProcessResponse:
-    """处理单个文件的核心逻辑（同步），返回 ProcessResponse。"""
+    """处理单个文件的核心逻辑（同步），通过 progress_cb 报告进度百分比。"""
+    def _report(pct: int, stage: str) -> None:
+        if progress_cb:
+            progress_cb(pct, stage)
+
+    total_pages = len(images)
     actual_type = doc_type_str
+
+    # 阶段 1：分类（0-20%）
     if actual_type == "auto":
+        _report(5, "分类中")
         classify_result = _classify_document(images[0])
         actual_type = classify_result.doc_type
-        logger.info(f"自动分类: {filename} → {actual_type} ({classify_result.confidence})")
+        logger.info(f"自动分类: {filename} → {actual_type} (置信度: {classify_result.confidence})")
+    _report(20, "分类完成")
 
     warnings: list[str] = []
     results: list[Any] = []
 
+    # 阶段 2：逐页识别（20-90%）
+    extract_start, extract_end = 20, 90
+    extract_range = extract_end - extract_start
+
     if actual_type == "customs":
+        _report(extract_start, f"识别进口单据 (共 {total_pages} 页)")
         pipeline = _get_pipeline()
         pipeline_result = pipeline.process(save_path)
         results = [r.model_dump() for r in pipeline_result.records]
@@ -370,29 +386,43 @@ def _process_single_file(
             crop_path = _save_crop(img, filename, i + 1)
             if i < len(results):
                 results[i]["crop_image_path"] = crop_path
+            pct = extract_start + int(extract_range * (i + 1) / total_pages)
+            _report(pct, f"识别进口单据 第 {i + 1}/{total_pages} 页")
 
     elif actual_type == "log_measurement":
         extractor = _get_log_extractor()
         for i, img in enumerate(images):
+            _report(extract_start + int(extract_range * i / total_pages),
+                    f"识别检尺单 第 {i + 1}/{total_pages} 页")
             crop_path = _save_crop(img, filename, i + 1)
             r = extractor.extract_page(img, filename=filename, page=i + 1)
             data = r.model_dump()
             data["crop_image_path"] = crop_path
             results.append(data)
+            logger.info(f"检尺单识别: {filename} 第 {i + 1}/{total_pages} 页完成")
 
     elif actual_type in ("log_output", "soak_pool", "slicing", "packing"):
+        type_names = {
+            "log_output": "出库表", "soak_pool": "入池表",
+            "slicing": "上机表", "packing": "打包表",
+        }
+        type_name = type_names.get(actual_type, actual_type)
         extractor = _get_factory_extractor()
         for i, img in enumerate(images):
+            _report(extract_start + int(extract_range * i / total_pages),
+                    f"识别{type_name} 第 {i + 1}/{total_pages} 页")
             crop_path = _save_crop(img, filename, i + 1)
             r = extractor.extract(img, doc_type=actual_type, filename=filename, page=i + 1)
             data = r.model_dump()
             data["crop_image_path"] = crop_path
             results.append(data)
+            logger.info(f"{type_name}识别: {filename} 第 {i + 1}/{total_pages} 页完成")
 
     else:
         raise ValueError(f"不支持的文档类型: {actual_type}")
 
-    # 保存历史
+    # 阶段 3：保存结果（90-100%）
+    _report(90, "保存结果")
     try:
         history.save_record(
             doc_type=actual_type,
@@ -404,6 +434,7 @@ def _process_single_file(
     except Exception as e:
         logger.warning(f"保存历史记录失败: {e}")
 
+    _report(100, "完成")
     return ProcessResponse(
         doc_type=actual_type,
         filename=filename,
@@ -427,12 +458,11 @@ async def process_batch(
     """批量处理多个文件，通过 SSE 推送每个文件的处理进度。
 
     SSE 事件类型：
-    - progress: {"index": 0, "total": 3, "filename": "a.pdf", "status": "processing"}
+    - progress: {"index": 0, "total": 3, "filename": "a.pdf", "percent": 30, "stage": "识别中第1/3页"}
     - result:   {"index": 0, "filename": "a.pdf", "data": {...ProcessResponse}}
     - error:    {"index": 0, "filename": "a.pdf", "error": "..."}
     - done:     {"total": 3, "success": 2, "failed": 1}
     """
-    # 预先保存所有上传文件
     saved_files: list[tuple[Path, str]] = []
     for f in files:
         path = _save_upload(f)
@@ -444,18 +474,25 @@ async def process_batch(
     async def event_generator() -> AsyncGenerator[dict, None]:
         success_count = 0
         for idx, (save_path, filename) in enumerate(saved_files):
-            # 检查客户端是否断开
             if await request.is_disconnected():
                 return
 
-            # 发送开始处理事件
+            logger.info(f"开始处理: {filename} ({idx + 1}/{total})")
+
+            # 线程安全的进度队列
+            progress_queue: asyncio.Queue[tuple[int, str]] = asyncio.Queue()
+
+            def on_progress(pct: int, stage: str) -> None:
+                progress_queue.put_nowait((pct, stage))
+
             yield {
                 "event": "progress",
                 "data": json.dumps({
                     "index": idx,
                     "total": total,
                     "filename": filename,
-                    "status": "processing",
+                    "percent": 0,
+                    "stage": "开始处理",
                 }),
             }
 
@@ -464,16 +501,52 @@ async def process_batch(
                 if not images:
                     raise ValueError("无法解析文件")
 
-                # 在线程池中执行同步处理
                 loop = asyncio.get_event_loop()
-                resp = await loop.run_in_executor(
+
+                # 异步执行处理，同时轮询进度队列
+                import concurrent.futures
+                future = loop.run_in_executor(
                     None,
                     _process_single_file,
-                    save_path,
-                    filename,
-                    doc_type_str,
-                    images,
+                    save_path, filename, doc_type_str, images, on_progress,
                 )
+
+                # 轮询进度直到处理完成
+                while not future.done():
+                    try:
+                        pct, stage = await asyncio.wait_for(
+                            progress_queue.get(), timeout=0.5
+                        )
+                        yield {
+                            "event": "progress",
+                            "data": json.dumps({
+                                "index": idx,
+                                "total": total,
+                                "filename": filename,
+                                "percent": pct,
+                                "stage": stage,
+                            }),
+                        }
+                    except asyncio.TimeoutError:
+                        pass
+
+                # 读取剩余进度消息
+                while not progress_queue.empty():
+                    pct, stage = progress_queue.get_nowait()
+                    yield {
+                        "event": "progress",
+                        "data": json.dumps({
+                            "index": idx,
+                            "total": total,
+                            "filename": filename,
+                            "percent": pct,
+                            "stage": stage,
+                        }),
+                    }
+
+                resp = future.result()
+                logger.info(f"处理完成: {filename} → {resp.doc_type}, "
+                            f"{len(resp.results)} 条记录, {len(resp.warnings)} 条警告")
 
                 yield {
                     "event": "result",
@@ -486,7 +559,7 @@ async def process_batch(
                 success_count += 1
 
             except Exception as e:
-                logger.error(f"批量处理失败: {filename}: {e}")
+                logger.error(f"处理失败: {filename}: {e}")
                 yield {
                     "event": "error",
                     "data": json.dumps({
@@ -496,7 +569,6 @@ async def process_batch(
                     }),
                 }
 
-        # 发送完成事件
         yield {
             "event": "done",
             "data": json.dumps({
@@ -505,6 +577,7 @@ async def process_batch(
                 "failed": total - success_count,
             }),
         }
+        logger.info(f"批量处理完成: 共 {total} 个文件, 成功 {success_count}, 失败 {total - success_count}")
 
     return EventSourceResponse(event_generator())
 

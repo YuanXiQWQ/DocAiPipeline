@@ -165,12 +165,103 @@ export default function HistoryPanel({onLoadResult}: HistoryPanelProps) {
                             </div>
                         )}
 
-                        {/* 识别结果 JSON */}
+                        {/* 识别结果 */}
                         <div>
                             <p className="text-sm font-medium text-gray-700 mb-2">{t("history.detail_results")}</p>
-                            <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 text-xs overflow-x-auto max-h-96">
-                {JSON.stringify(detail.results, null, 2)}
-              </pre>
+                            <div className="space-y-4">
+                                {detail.results.map((rec, ri) => {
+                                    const fields = (rec.fields ?? rec.entries ?? []) as Record<string, unknown>[];
+                                    /* 字段列表格式：[{field_name, value, ...}] */
+                                    const isFieldList = fields.length > 0 && "field_name" in fields[0] && "value" in fields[0];
+
+                                    if (isFieldList) {
+                                        return (
+                                            <details key={ri} open={detail.results.length <= 3} className="group">
+                                                <summary className="text-sm font-medium text-gray-600 cursor-pointer mb-2">
+                                                    {t("review.record")} {ri + 1}
+                                                </summary>
+                                                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                                                    <table className="min-w-full text-sm">
+                                                        <thead>
+                                                        <tr className="bg-gray-50">
+                                                            <th className="px-3 py-2 text-left font-medium text-gray-600 border-b border-gray-200 w-1/3">{t("history.field_name")}</th>
+                                                            <th className="px-3 py-2 text-left font-medium text-gray-600 border-b border-gray-200">{t("history.field_value")}</th>
+                                                        </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                        {fields.map((f, fi) => (
+                                                            <tr key={fi} className={fi % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
+                                                                <td className="px-3 py-1.5 border-b border-gray-100 text-gray-500 text-xs">{t(`field.${f.field_name}`) !== `field.${f.field_name}` ? `${t(`field.${f.field_name}`)} (${f.field_name})` : String(f.field_name ?? "")}</td>
+                                                                <td className="px-3 py-1.5 border-b border-gray-100 text-gray-900">{String(f.value ?? "—")}</td>
+                                                            </tr>
+                                                        ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </details>
+                                        );
+                                    }
+
+                                    /* 表格行格式：[{col1, col2, ...}] */
+                                    if (Array.isArray(fields) && fields.length > 0) {
+                                        const cols = Object.keys(fields[0]).filter(
+                                            k => k !== "needs_review" && k !== "review_reason" && k !== "crop_image_path"
+                                        );
+                                        return (
+                                            <details key={ri} open={detail.results.length <= 3} className="group">
+                                                <summary className="text-sm font-medium text-gray-600 cursor-pointer mb-2">
+                                                    {t("review.record")} {ri + 1} — {fields.length} {t("review.rows")}
+                                                </summary>
+                                                <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                                                    <table className="min-w-full text-xs border-collapse">
+                                                        <thead>
+                                                        <tr className="bg-gray-50">
+                                                            {cols.map(c => (
+                                                                <th key={c} className="px-2 py-1.5 border-b border-gray-200 text-left font-medium text-gray-600 whitespace-nowrap">{t(`field.${c}`) !== `field.${c}` ? `${t(`field.${c}`)} (${c})` : c}</th>
+                                                            ))}
+                                                        </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                        {fields.slice(0, 50).map((row, rIdx) => (
+                                                            <tr key={rIdx} className={rIdx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
+                                                                {cols.map(c => (
+                                                                    <td key={c} className="px-2 py-1 border-b border-gray-100 text-gray-700 whitespace-nowrap">{String(row[c] ?? "")}</td>
+                                                                ))}
+                                                            </tr>
+                                                        ))}
+                                                        </tbody>
+                                                    </table>
+                                                    {fields.length > 50 && (
+                                                        <p className="text-xs text-gray-400 px-3 py-1.5">{t("review.more_rows").replace("{n}", String(fields.length - 50))}</p>
+                                                    )}
+                                                </div>
+                                            </details>
+                                        );
+                                    }
+
+                                    /* 无法识别结构，用简洁 key-value 展示 */
+                                    const keys = Object.keys(rec).filter(k => k !== "record_index" && k !== "crop_image_path");
+                                    return (
+                                        <details key={ri} open={detail.results.length <= 3} className="group">
+                                            <summary className="text-sm font-medium text-gray-600 cursor-pointer mb-2">
+                                                {t("review.record")} {ri + 1}
+                                            </summary>
+                                            <div className="border border-gray-200 rounded-lg overflow-hidden">
+                                                <table className="min-w-full text-sm">
+                                                    <tbody>
+                                                    {keys.map((k, ki) => (
+                                                        <tr key={ki} className={ki % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
+                                                            <td className="px-3 py-1.5 border-b border-gray-100 text-gray-500 text-xs w-1/3">{t(`field.${k}`) !== `field.${k}` ? `${t(`field.${k}`)} (${k})` : k}</td>
+                                                            <td className="px-3 py-1.5 border-b border-gray-100 text-gray-900">{typeof rec[k] === "object" ? JSON.stringify(rec[k]) : String(rec[k] ?? "—")}</td>
+                                                        </tr>
+                                                    ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </details>
+                                    );
+                                })}
+                            </div>
                         </div>
                 </div>
             </div>

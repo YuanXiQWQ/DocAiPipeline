@@ -274,21 +274,17 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                             <label className="block text-sm font-medium text-slate-700 mb-2">
                                 {t("settings.language")}
                             </label>
-                            <div className="flex gap-2">
+                            <select
+                                value={language}
+                                onChange={(e) => setLanguage(e.target.value as Locale)}
+                                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                            >
                                 {LOCALE_OPTIONS.map((opt) => (
-                                    <button
-                                        key={opt.value}
-                                        onClick={() => setLanguage(opt.value)}
-                                        className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${
-                                            language === opt.value
-                                                ? "border-blue-500 bg-blue-50 text-blue-700"
-                                                : "border-slate-200 text-slate-600 hover:border-slate-300"
-                                        }`}
-                                    >
+                                    <option key={opt.value} value={opt.value}>
                                         {opt.label}
-                                    </button>
+                                    </option>
                                 ))}
-                            </div>
+                            </select>
                         </div>
 
                         {/* 错误/成功提示 */}
