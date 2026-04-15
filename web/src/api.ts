@@ -102,15 +102,15 @@ export async function updateSettings(
     return data;
 }
 
-/** 文档类型中文映射 */
-export const DOC_TYPE_LABELS: Record<string, string> = {
-    auto: "自动识别",
-    customs: "进口单据（报关/税款/发票）",
-    log_measurement: "原木检尺单",
-    log_output: "原木领用出库表",
-    soak_pool: "刨切木方入池表",
-    slicing: "刨切木方上机表",
-    packing: "表板打包报表",
+/** 文档类型 → i18n key 映射，使用时需配合 t() 翻译 */
+export const DOC_TYPE_KEYS: Record<string, string> = {
+    auto: "doc_type.auto",
+    customs: "doc_type.customs",
+    log_measurement: "doc_type.log_measurement",
+    log_output: "doc_type.log_output",
+    soak_pool: "doc_type.soak_pool",
+    slicing: "doc_type.slicing",
+    packing: "doc_type.packing",
 };
 
 // ------------------------------------------------------------------
@@ -222,5 +222,29 @@ export interface OverallSummary {
 
 export async function getSummary(): Promise<OverallSummary> {
     const {data} = await api.get<OverallSummary>("/api/summary");
+    return data;
+}
+
+/* 开机自启 */
+export async function getAutostart(): Promise<{ enabled: boolean }> {
+    const {data} = await api.get<{ enabled: boolean }>("/api/autostart");
+    return data;
+}
+
+export async function setAutostart(enabled: boolean): Promise<{ enabled: boolean }> {
+    const {data} = await api.put<{ enabled: boolean }>("/api/autostart", {enabled});
+    return data;
+}
+
+/* 版本与更新检查 */
+export interface VersionInfo {
+    current: string;
+    latest?: string;
+    has_update: boolean;
+    release_url?: string;
+}
+
+export async function checkUpdate(): Promise<VersionInfo> {
+    const {data} = await api.get<VersionInfo>("/api/version");
     return data;
 }

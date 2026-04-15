@@ -116,5 +116,17 @@
   "settings.saved": "Settings saved",
   "settings.save": "Save Settings",
   "settings.view_pricing": "View pricing",
+  "settings.autostart": "Start on Boot",
+  "settings.autostart_desc": "Automatically launch DocAI Pipeline when system starts",
+  "settings.autostart_enabled": "Auto-start enabled",
+  "settings.autostart_disabled": "Auto-start disabled",
+  "settings.update": "Check for Updates",
+  "settings.update_checking": "Checking…",
+  "settings.update_latest": "You are on the latest version",
+  "settings.update_available": "New version {version} available",
+  "settings.update_go": "Go to Download",
+  "settings.update_error": "Failed to check for updates",
+  "settings.update_current": "Current Version",
+  "settings.about": "About",
   "footer.powered": "Terra Drvo d.o.o. · Powered by"
 }

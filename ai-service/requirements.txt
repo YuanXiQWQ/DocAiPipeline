@@ -27,6 +27,9 @@ pydantic-settings>=2.5
 # Logging
 loguru>=0.7
 
+# HTTP client (update check)
+httpx>=0.27
+
 # 桌面应用（托盘图标）
 pystray>=0.19
 Pillow>=10.4

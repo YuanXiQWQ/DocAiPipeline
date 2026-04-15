@@ -1,7 +1,6 @@
 import React, {useState, useEffect} from "react";
 import {
     BarChart3,
-    X,
     Truck,
     TreePine,
     Package,
@@ -16,10 +15,6 @@ import {
     type OverallSummary,
 } from "./api";
 import {useT} from "./i18n";
-
-interface DashboardPanelProps {
-    onClose: () => void;
-}
 
 function StatCard({
                       icon,
@@ -48,7 +43,7 @@ function StatCard({
     );
 }
 
-export default function DashboardPanel({onClose}: DashboardPanelProps) {
+export default function DashboardPanel() {
     const t = useT();
     const [data, setData] = useState<OverallSummary | null>(null);
     const [loading, setLoading] = useState(true);
@@ -63,25 +58,11 @@ export default function DashboardPanel({onClose}: DashboardPanelProps) {
     }, []);
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
-                {/* 标题栏 */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-                    <div className="flex items-center gap-3">
-                        <BarChart3 className="w-6 h-6 text-blue-600"/>
-                        <h2 className="text-lg font-semibold text-gray-900">{t("dashboard.title")}</h2>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 transition"
-                    >
-                        <X className="w-5 h-5"/>
-                    </button>
-                </div>
-
-                {/* 内容 */}
-                <div className="flex-1 overflow-y-auto p-6">
+        <div className="space-y-8">
+            <div className="flex items-center gap-3 mb-2">
+                <BarChart3 className="w-6 h-6 text-blue-600"/>
+                <h2 className="text-xl font-semibold text-gray-900">{t("dashboard.title")}</h2>
+            </div>
                     {loading ? (
                         <div className="flex items-center justify-center py-20">
                             <Loader2 className="w-6 h-6 animate-spin text-blue-500"/>
@@ -266,8 +247,6 @@ export default function DashboardPanel({onClose}: DashboardPanelProps) {
                             )}
                         </div>
                     ) : null}
-                </div>
-            </div>
         </div>
     );
 }

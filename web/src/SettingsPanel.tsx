@@ -1,7 +1,6 @@
 import {useState, useEffect, useCallback} from "react";
 import {
     Settings as SettingsIcon,
-    X,
     Eye,
     EyeOff,
     ExternalLink,
@@ -9,22 +8,28 @@ import {
     Loader2,
     CheckCircle,
     AlertCircle,
+    RefreshCw,
+    Power,
+    Info,
 } from "lucide-react";
 import {
     getSettings,
     updateSettings,
+    getAutostart,
+    setAutostart as apiSetAutostart,
+    checkUpdate,
     extractErrorMessage,
     type UserSettings,
     type ModelInfo,
+    type VersionInfo,
 } from "./api";
 import {getCurrentLocale, setLocale, LOCALE_OPTIONS, useT, type Locale} from "./i18n";
 
 interface Props {
-    open: boolean;
-    onClose: () => void;
+    onSettingsChange?: () => void;
 }
 
-export default function SettingsPanel({open, onClose}: Props) {
+export default function SettingsPanel({onSettingsChange}: Props) {
     const t = useT();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -41,23 +46,35 @@ export default function SettingsPanel({open, onClose}: Props) {
     const [baseUrl, setBaseUrl] = useState("");
     const [language, setLanguage] = useState<Locale>(getCurrentLocale());
 
+    // 开机自启状态
+    const [autostart, setAutostartState] = useState(false);
+    const [autostartLoading, setAutostartLoading] = useState(false);
+
+    // 版本与更新
+    const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
+    const [updateLoading, setUpdateLoading] = useState(false);
+    const [updateError, setUpdateError] = useState<string | null>(null);
+
     // 加载设置
     useEffect(() => {
-        if (!open) return;
         setLoading(true);
         setError(null);
         setSaved(false);
-        getSettings()
-            .then((res) => {
+        Promise.all([
+            getSettings(),
+            getAutostart().catch(() => ({enabled: false})),
+        ])
+            .then(([res, autostartRes]) => {
                 setCurrentSettings(res.settings);
                 setModels(res.available_models);
                 setSelectedModel(res.settings.openai_model);
                 setBaseUrl(res.settings.openai_base_url);
-                setApiKey(""); // 不回显真实 key
+                setApiKey("");
+                setAutostartState(autostartRes.enabled);
             })
             .catch((err) => setError(extractErrorMessage(err)))
             .finally(() => setLoading(false));
-    }, [open]);
+    }, []);
 
     const handleSave = useCallback(async () => {
         setSaving(true);
@@ -79,6 +96,7 @@ export default function SettingsPanel({open, onClose}: Props) {
             // 同步前端语言
             setLocale(language);
             setSaved(true);
+            onSettingsChange?.();
             setTimeout(() => setSaved(false), 3000);
         } catch (err) {
             setError(extractErrorMessage(err));
@@ -87,32 +105,20 @@ export default function SettingsPanel({open, onClose}: Props) {
         }
     }, [apiKey, selectedModel, baseUrl, language]);
 
-    if (!open) return null;
-
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-4 max-h-[90vh] overflow-y-auto">
-                {/* 标题栏 */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-                    <div className="flex items-center gap-2">
-                        <SettingsIcon className="w-5 h-5 text-slate-600"/>
-                        <h2 className="text-lg font-semibold text-slate-800">{t("settings.title")}</h2>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="p-1 rounded-lg hover:bg-slate-100 transition-colors"
-                    >
-                        <X className="w-5 h-5 text-slate-500"/>
-                    </button>
-                </div>
+        <div className="max-w-xl space-y-6">
+            <div className="flex items-center gap-2 mb-2">
+                <SettingsIcon className="w-6 h-6 text-slate-600"/>
+                <h2 className="text-xl font-semibold text-slate-800">{t("settings.title")}</h2>
+            </div>
 
-                {loading ? (
-                    <div className="p-12 text-center">
-                        <Loader2 className="w-8 h-8 text-blue-500 mx-auto animate-spin"/>
-                        <p className="text-sm text-slate-500 mt-2">{t("settings.loading")}</p>
-                    </div>
-                ) : (
-                    <div className="p-6 space-y-6">
+            {loading ? (
+                <div className="p-12 text-center">
+                    <Loader2 className="w-8 h-8 text-blue-500 mx-auto animate-spin"/>
+                    <p className="text-sm text-slate-500 mt-2">{t("settings.loading")}</p>
+                </div>
+            ) : (
+                <div className="space-y-6">
                         {/* API Key */}
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -229,6 +235,40 @@ export default function SettingsPanel({open, onClose}: Props) {
                             </div>
                         </details>
 
+                        {/* 开机自启 */}
+                        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+                            <div className="flex items-center gap-3">
+                                <Power className="w-5 h-5 text-slate-500"/>
+                                <div>
+                                    <p className="text-sm font-medium text-slate-700">{t("settings.autostart")}</p>
+                                    <p className="text-xs text-slate-400">{t("settings.autostart_desc")}</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={async () => {
+                                    setAutostartLoading(true);
+                                    try {
+                                        const res = await apiSetAutostart(!autostart);
+                                        setAutostartState(res.enabled);
+                                    } catch (err) {
+                                        setError(extractErrorMessage(err));
+                                    } finally {
+                                        setAutostartLoading(false);
+                                    }
+                                }}
+                                disabled={autostartLoading}
+                                className={`relative w-11 h-6 rounded-full transition-colors ${
+                                    autostart ? "bg-blue-600" : "bg-slate-300"
+                                }`}
+                            >
+                                <span
+                                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                                        autostart ? "translate-x-5" : ""
+                                    }`}
+                                />
+                            </button>
+                        </div>
+
                         {/* 界面语言 */}
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -267,24 +307,87 @@ export default function SettingsPanel({open, onClose}: Props) {
                             </div>
                         )}
 
-                        {/* 保存按钮 */}
-                        <div className="flex justify-end pt-2">
+                    {/* 关于 & 检查更新 */}
+                    <div className="p-4 bg-slate-50 rounded-xl space-y-3">
+                        <div className="flex items-center gap-2">
+                            <Info className="w-4 h-4 text-slate-500"/>
+                            <span className="text-sm font-medium text-slate-700">{t("settings.about")}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <div className="text-sm text-slate-500">
+                                <span>{t("settings.update_current")}: </span>
+                                <span className="font-mono font-medium text-slate-700">
+                                    {versionInfo?.current ?? "..."}
+                                </span>
+                            </div>
                             <button
-                                onClick={handleSave}
-                                disabled={saving}
-                                className="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
+                                onClick={async () => {
+                                    setUpdateLoading(true);
+                                    setUpdateError(null);
+                                    try {
+                                        const info = await checkUpdate();
+                                        setVersionInfo(info);
+                                    } catch {
+                                        setUpdateError(t("settings.update_error"));
+                                    } finally {
+                                        setUpdateLoading(false);
+                                    }
+                                }}
+                                disabled={updateLoading}
+                                className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-white transition-colors flex items-center gap-1.5 disabled:opacity-50"
                             >
-                                {saving ? (
-                                    <Loader2 className="w-4 h-4 animate-spin"/>
+                                {updateLoading ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin"/>
                                 ) : (
-                                    <Save className="w-4 h-4"/>
+                                    <RefreshCw className="w-3.5 h-3.5"/>
                                 )}
-                                {t("settings.save")}
+                                {updateLoading ? t("settings.update_checking") : t("settings.update")}
                             </button>
                         </div>
+                        {versionInfo && !versionInfo.has_update && (
+                            <p className="text-xs text-emerald-600 flex items-center gap-1">
+                                <CheckCircle className="w-3.5 h-3.5"/>
+                                {t("settings.update_latest")}
+                            </p>
+                        )}
+                        {versionInfo?.has_update && (
+                            <div className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2">
+                                <p className="text-sm text-blue-700">
+                                    {t("settings.update_available").replace("{version}", versionInfo.latest ?? "")}
+                                </p>
+                                <a
+                                    href={versionInfo.release_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                                >
+                                    {t("settings.update_go")}
+                                    <ExternalLink className="w-3.5 h-3.5"/>
+                                </a>
+                            </div>
+                        )}
+                        {updateError && (
+                            <p className="text-xs text-red-500">{updateError}</p>
+                        )}
                     </div>
-                )}
-            </div>
+
+                    {/* 保存按钮 */}
+                    <div className="flex justify-end pt-2">
+                        <button
+                            onClick={handleSave}
+                            disabled={saving}
+                            className="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
+                        >
+                            {saving ? (
+                                <Loader2 className="w-4 h-4 animate-spin"/>
+                            ) : (
+                                <Save className="w-4 h-4"/>
+                            )}
+                            {t("settings.save")}
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

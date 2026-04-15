@@ -113,6 +113,105 @@ async def update_settings(body: dict):
 
 
 # ------------------------------------------------------------------
+# 开机自启
+# ------------------------------------------------------------------
+
+# Windows 注册表路径
+_AUTOSTART_REG_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+_AUTOSTART_APP_NAME = "DocAI-Pipeline"
+
+
+def _get_exe_path() -> str | None:
+    """获取当前可执行文件路径（仅 PyInstaller 打包后有效）。"""
+    import sys
+
+    if getattr(sys, "frozen", False):
+        return sys.executable
+    return None
+
+
+def _is_autostart_enabled() -> bool:
+    """检查是否已启用开机自启。"""
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _AUTOSTART_REG_KEY, 0, winreg.KEY_READ) as key:
+            winreg.QueryValueEx(key, _AUTOSTART_APP_NAME)
+            return True
+    except (FileNotFoundError, OSError, ImportError):
+        return False
+
+
+def _set_autostart(enabled: bool) -> bool:
+    """设置或移除开机自启注册表项。"""
+    try:
+        import winreg
+
+        exe = _get_exe_path()
+        if not exe and enabled:
+            return False
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _AUTOSTART_REG_KEY, 0, winreg.KEY_SET_VALUE) as key:
+            if enabled and exe:
+                winreg.SetValueEx(key, _AUTOSTART_APP_NAME, 0, winreg.REG_SZ, exe)
+            else:
+                try:
+                    winreg.DeleteValue(key, _AUTOSTART_APP_NAME)
+                except FileNotFoundError:
+                    pass
+        return True
+    except (OSError, ImportError):
+        return False
+
+
+@app.get("/api/autostart")
+async def get_autostart():
+    """获取开机自启状态。"""
+    return {"enabled": _is_autostart_enabled()}
+
+
+@app.put("/api/autostart")
+async def update_autostart(body: dict):
+    """设置开机自启。"""
+    enabled = body.get("enabled", False)
+    ok = _set_autostart(enabled)
+    if not ok and enabled:
+        raise HTTPException(status_code=400, detail="仅桌面应用模式支持开机自启")
+    return {"enabled": _is_autostart_enabled()}
+
+
+# ------------------------------------------------------------------
+# 版本与更新检查
+# ------------------------------------------------------------------
+
+APP_VERSION = app.version
+GITHUB_REPO = "YuanXiQWQ/DocAiPipeline"
+
+
+@app.get("/api/version")
+async def check_version():
+    """获取当前版本并检查 GitHub 最新 Release。"""
+    import httpx
+
+    result: dict = {"current": APP_VERSION, "has_update": False}
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
+                headers={"Accept": "application/vnd.github.v3+json"},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                latest_tag = data.get("tag_name", "").lstrip("v")
+                result["latest"] = latest_tag
+                result["release_url"] = data.get("html_url", "")
+                if latest_tag and latest_tag != APP_VERSION:
+                    result["has_update"] = True
+    except Exception as e:
+        logger.warning(f"检查更新失败: {e}")
+    return result
+
+
+# ------------------------------------------------------------------
 # 兼容旧版端点（Phase 1 进口单据）
 # ------------------------------------------------------------------
 

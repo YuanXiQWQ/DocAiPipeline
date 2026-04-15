@@ -116,5 +116,17 @@
   "settings.saved": "设置已保存",
   "settings.save": "保存设置",
   "settings.view_pricing": "查看定价",
+  "settings.autostart": "开机自启",
+  "settings.autostart_desc": "系统启动时自动运行 DocAI Pipeline",
+  "settings.autostart_enabled": "已启用开机自启",
+  "settings.autostart_disabled": "已禁用开机自启",
+  "settings.update": "检查更新",
+  "settings.update_checking": "正在检查…",
+  "settings.update_latest": "已是最新版本",
+  "settings.update_available": "发现新版本 {version}",
+  "settings.update_go": "前往下载",
+  "settings.update_error": "检查更新失败",
+  "settings.update_current": "当前版本",
+  "settings.about": "关于",
   "footer.powered": "Terra Drvo d.o.o. · 驱动自"
 }

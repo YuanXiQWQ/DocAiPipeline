@@ -116,5 +116,17 @@
   "settings.saved": "Podešavanja sačuvana",
   "settings.save": "Sačuvaj",
   "settings.view_pricing": "Pogledaj cene",
+  "settings.autostart": "Pokretanje pri startu",
+  "settings.autostart_desc": "Automatski pokreni DocAI Pipeline pri pokretanju sistema",
+  "settings.autostart_enabled": "Automatsko pokretanje omogućeno",
+  "settings.autostart_disabled": "Automatsko pokretanje onemogućeno",
+  "settings.update": "Proveri ažuriranja",
+  "settings.update_checking": "Proveravam…",
+  "settings.update_latest": "Imate najnoviju verziju",
+  "settings.update_available": "Nova verzija {version} je dostupna",
+  "settings.update_go": "Idi na preuzimanje",
+  "settings.update_error": "Greška pri proveri ažuriranja",
+  "settings.update_current": "Trenutna verzija",
+  "settings.about": "O programu",
   "footer.powered": "Terra Drvo d.o.o. · Pokreće"
 }

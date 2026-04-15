@@ -8,7 +8,6 @@ import {
     ChevronRight,
     BarChart3,
     CheckCircle,
-    X,
     Loader2,
 } from "lucide-react";
 import {
@@ -17,7 +16,7 @@ import {
     getHistoryDetail,
     deleteHistory,
     extractErrorMessage,
-    DOC_TYPE_LABELS,
+    DOC_TYPE_KEYS,
     type HistorySummary,
     type HistoryStats,
     type HistoryDetail,
@@ -25,11 +24,10 @@ import {
 import {useT} from "./i18n";
 
 interface HistoryPanelProps {
-    onClose: () => void;
     onLoadResult?: (detail: HistoryDetail) => void;
 }
 
-export default function HistoryPanel({onClose, onLoadResult}: HistoryPanelProps) {
+export default function HistoryPanel({onLoadResult}: HistoryPanelProps) {
     const t = useT();
     const [records, setRecords] = useState<HistorySummary[]>([]);
     const [total, setTotal] = useState(0);
@@ -106,48 +104,35 @@ export default function HistoryPanel({onClose, onLoadResult}: HistoryPanelProps)
     // 详情视图
     if (detail) {
         return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                <div
-                    className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-                    {/* 标题栏 */}
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-                        <div className="flex items-center gap-3">
-                            <button
-                                onClick={() => setDetail(null)}
-                                className="p-1.5 rounded-lg hover:bg-gray-100 transition"
-                            >
-                                <ChevronLeft className="w-5 h-5"/>
-                            </button>
-                            <div>
-                                <h3 className="font-semibold text-gray-900">{detail.filename}</h3>
-                                <p className="text-sm text-gray-500">
-                                    {DOC_TYPE_LABELS[detail.doc_type] || detail.doc_type} · {formatTime(detail.timestamp)}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            {onLoadResult && (
-                                <button
-                                    onClick={() => {
-                                        onLoadResult(detail);
-                                        onClose();
-                                    }}
-                                    className="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
-                                >
-                                    {t("history.load")}
-                                </button>
-                            )}
-                            <button
-                                onClick={() => setDetail(null)}
-                                className="p-1.5 rounded-lg hover:bg-gray-100 transition"
-                            >
-                                <X className="w-5 h-5"/>
-                            </button>
+            <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setDetail(null)}
+                            className="p-1.5 rounded-lg hover:bg-gray-100 transition"
+                        >
+                            <ChevronLeft className="w-5 h-5"/>
+                        </button>
+                        <div>
+                            <h3 className="font-semibold text-gray-900">{detail.filename}</h3>
+                            <p className="text-sm text-gray-500">
+                                {DOC_TYPE_KEYS[detail.doc_type] ? t(DOC_TYPE_KEYS[detail.doc_type]) : detail.doc_type} · {formatTime(detail.timestamp)}
+                            </p>
                         </div>
                     </div>
+                    <div className="flex items-center gap-2">
+                        {onLoadResult && (
+                            <button
+                                onClick={() => onLoadResult(detail)}
+                                className="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
+                            >
+                                {t("history.load")}
+                            </button>
+                        )}
+                    </div>
+                </div>
 
-                    {/* 内容 */}
-                    <div className="flex-1 overflow-y-auto p-6">
+                <div>
                         {/* 元信息 */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                             <div className="bg-gray-50 rounded-lg p-3">
@@ -187,7 +172,6 @@ export default function HistoryPanel({onClose, onLoadResult}: HistoryPanelProps)
                 {JSON.stringify(detail.results, null, 2)}
               </pre>
                         </div>
-                    </div>
                 </div>
             </div>
         );
@@ -195,31 +179,20 @@ export default function HistoryPanel({onClose, onLoadResult}: HistoryPanelProps)
 
     // 主列表视图
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-                {/* 标题栏 */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-                    <div className="flex items-center gap-3">
-                        <Clock className="w-6 h-6 text-blue-600"/>
-                        <h2 className="text-lg font-semibold text-gray-900">{t("history.title")}</h2>
-                        {stats && (
-                            <span className="text-sm text-gray-500">
-                {t("history.total").replace("{n}", String(stats.total_records))} · {t("history.recent").replace("{n}", String(stats.recent_7_days))}
-              </span>
-                        )}
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 transition"
-                    >
-                        <X className="w-5 h-5"/>
-                    </button>
-                </div>
+        <div className="space-y-6">
+            <div className="flex items-center gap-3 mb-2">
+                <Clock className="w-6 h-6 text-blue-600"/>
+                <h2 className="text-xl font-semibold text-gray-900">{t("history.title")}</h2>
+                {stats && (
+                    <span className="text-sm text-gray-500">
+                        {t("history.total").replace("{n}", String(stats.total_records))} · {t("history.recent").replace("{n}", String(stats.recent_7_days))}
+                    </span>
+                )}
+            </div>
 
                 {/* 统计卡片 */}
                 {stats && stats.total_records > 0 && (
-                    <div className="px-6 py-3 border-b border-gray-100 bg-gray-50/50">
+                    <div className="py-3 px-4 bg-gray-50/50 rounded-xl border border-gray-100">
                         <div className="flex gap-6 text-sm">
                             <div className="flex items-center gap-1.5">
                                 <BarChart3 className="w-4 h-4 text-blue-500"/>
@@ -234,7 +207,7 @@ export default function HistoryPanel({onClose, onLoadResult}: HistoryPanelProps)
                             {Object.entries(stats.by_doc_type).map(([type, count]) => (
                                 <div key={type} className="flex items-center gap-1">
                                     <span
-                                        className="text-gray-500">{DOC_TYPE_LABELS[type]?.split("（")[0] || type}</span>
+                                        className="text-gray-500">{DOC_TYPE_KEYS[type] ? t(DOC_TYPE_KEYS[type]) : type}</span>
                                     <span className="font-medium text-gray-700">{count}</span>
                                 </div>
                             ))}
@@ -243,7 +216,7 @@ export default function HistoryPanel({onClose, onLoadResult}: HistoryPanelProps)
                 )}
 
                 {/* 搜索与筛选 */}
-                <div className="px-6 py-3 border-b border-gray-100 flex gap-3">
+                <div className="py-3 flex gap-3">
                     <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
                         <input
@@ -266,16 +239,16 @@ export default function HistoryPanel({onClose, onLoadResult}: HistoryPanelProps)
                         className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
                     >
                         <option value="">{t("history.all_types")}</option>
-                        {Object.entries(DOC_TYPE_LABELS)
+                        {Object.entries(DOC_TYPE_KEYS)
                             .filter(([k]) => k !== "auto")
-                            .map(([k, v]) => (
-                                <option key={k} value={k}>{v}</option>
+                            .map(([k, i18nKey]) => (
+                                <option key={k} value={k}>{t(i18nKey)}</option>
                             ))}
                     </select>
                 </div>
 
                 {/* 列表 */}
-                <div className="flex-1 overflow-y-auto">
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                     {loading ? (
                         <div className="flex items-center justify-center py-20">
                             <Loader2 className="w-6 h-6 animate-spin text-blue-500"/>
@@ -291,7 +264,7 @@ export default function HistoryPanel({onClose, onLoadResult}: HistoryPanelProps)
                             {records.map((r) => (
                                 <div
                                     key={r.id}
-                                    className="px-6 py-3 hover:bg-gray-50 transition flex items-center gap-4 cursor-pointer"
+                                    className="px-4 py-3 hover:bg-gray-50 transition flex items-center gap-4 cursor-pointer"
                                     onClick={() => handleDetail(r.id)}
                                 >
                                     <div className="flex-1 min-w-0">
@@ -303,7 +276,7 @@ export default function HistoryPanel({onClose, onLoadResult}: HistoryPanelProps)
                                         </div>
                                         <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500">
                       <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded">
-                        {DOC_TYPE_LABELS[r.doc_type]?.split("（")[0] || r.doc_type}
+                        {DOC_TYPE_KEYS[r.doc_type] ? t(DOC_TYPE_KEYS[r.doc_type]) : r.doc_type}
                       </span>
                                             <span>{r.pages} {t("history.pages_unit")}</span>
                                             <span>{r.record_count} {t("history.records_unit")}</span>
@@ -327,7 +300,7 @@ export default function HistoryPanel({onClose, onLoadResult}: HistoryPanelProps)
 
                 {/* 分页 */}
                 {totalPages > 1 && (
-                    <div className="px-6 py-3 border-t border-gray-200 flex items-center justify-between text-sm">
+                    <div className="py-3 flex items-center justify-between text-sm">
             <span className="text-gray-500">
               {t("history.page_info").replace("{current}", String(currentPage)).replace("{total}", String(totalPages)).replace("{count}", String(total))}
             </span>
@@ -349,7 +322,6 @@ export default function HistoryPanel({onClose, onLoadResult}: HistoryPanelProps)
                         </div>
                     </div>
                 )}
-            </div>
         </div>
     );
 }
