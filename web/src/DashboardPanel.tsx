@@ -48,8 +48,8 @@ function fmtNum(v: number): string {
 /* ============================================================== */
 
 type LengthUnit = "mm" | "cm" | "m" | "in" | "ft";
-type AreaUnit = "mm²" | "cm²" | "m²" | "in²" | "ft²";
-type VolumeUnit = "mm³" | "cm³" | "m³" | "in³" | "ft³";
+type AreaUnit = "mm2" | "cm2" | "m2" | "in2" | "ft2";
+type VolumeUnit = "mm3" | "cm3" | "m3" | "in3" | "ft3";
 type CurrencyUnit = "EUR" | "USD" | "CNY" | "RSD";
 
 interface UnitConfig {
@@ -60,15 +60,22 @@ interface UnitConfig {
 }
 
 const LENGTH_TO_M: Record<LengthUnit, number> = { mm: 0.001, cm: 0.01, m: 1, in: 0.0254, ft: 0.3048 };
-const AREA_TO_M2: Record<AreaUnit, number> = { "mm²": 1e-6, "cm²": 1e-4, "m²": 1, "in²": 0.00064516, "ft²": 0.092903 };
-const VOL_TO_M3: Record<VolumeUnit, number> = { "mm³": 1e-9, "cm³": 1e-6, "m³": 1, "in³": 1.6387e-5, "ft³": 0.0283168 };
+const AREA_TO_M2: Record<AreaUnit, number> = { mm2: 1e-6, cm2: 1e-4, m2: 1, in2: 0.00064516, ft2: 0.092903 };
+const VOL_TO_M3: Record<VolumeUnit, number> = { mm3: 1e-9, cm3: 1e-6, m3: 1, in3: 1.6387e-5, ft3: 0.0283168 };
 
 const LENGTH_UNITS: LengthUnit[] = ["mm", "cm", "m", "in", "ft"];
-const AREA_UNITS: AreaUnit[] = ["mm²", "cm²", "m²", "in²", "ft²"];
-const VOLUME_UNITS: VolumeUnit[] = ["mm³", "cm³", "m³", "in³", "ft³"];
+const AREA_UNITS: AreaUnit[] = ["mm2", "cm2", "m2", "in2", "ft2"];
+const VOLUME_UNITS: VolumeUnit[] = ["mm3", "cm3", "m3", "in3", "ft3"];
 const CURRENCY_UNITS: CurrencyUnit[] = ["EUR", "USD", "CNY", "RSD"];
 
-const DEFAULT_UNITS: UnitConfig = { length: "m", area: "m²", volume: "m³", currency: "EUR" };
+const DEFAULT_UNITS: UnitConfig = { length: "m", area: "m2", volume: "m3", currency: "EUR" };
+
+/* ASCII key → 显示用上标符号 */
+const UNIT_LABEL: Record<string, string> = {
+    mm2: "mm\u00b2", cm2: "cm\u00b2", m2: "m\u00b2", in2: "in\u00b2", ft2: "ft\u00b2",
+    mm3: "mm\u00b3", cm3: "cm\u00b3", m3: "m\u00b3", in3: "in\u00b3", ft3: "ft\u00b3",
+};
+function unitLabel(u: string): string { return UNIT_LABEL[u] ?? u; }
 
 /** 单位换算：将原始值从原始单位转换到目标单位（仅视觉展示） */
 function convertUnit(value: number, fromUnit: string, units: UnitConfig, rates: Record<string, number>): { value: number; unit: string } {
@@ -83,16 +90,16 @@ function convertUnit(value: number, fromUnit: string, units: UnitConfig, rates: 
         return {value: value * fromToEur * eurToTarget, unit: units.currency};
     }
     // 体积
-    if (fu === "m³" || fu === "cm³" || fu === "mm³" || fu === "in³" || fu === "ft³") {
+    if (fu === "m3" || fu === "cm3" || fu === "mm3" || fu === "in3" || fu === "ft3") {
         const fromFactor = VOL_TO_M3[fu as VolumeUnit] ?? 1;
         const toFactor = VOL_TO_M3[units.volume] ?? 1;
-        return {value: value * fromFactor / toFactor, unit: units.volume};
+        return {value: value * fromFactor / toFactor, unit: unitLabel(units.volume)};
     }
     // 面积
-    if (fu === "m²" || fu === "cm²" || fu === "mm²" || fu === "in²" || fu === "ft²") {
+    if (fu === "m2" || fu === "cm2" || fu === "mm2" || fu === "in2" || fu === "ft2") {
         const fromFactor = AREA_TO_M2[fu as AreaUnit] ?? 1;
         const toFactor = AREA_TO_M2[units.area] ?? 1;
-        return {value: value * fromFactor / toFactor, unit: units.area};
+        return {value: value * fromFactor / toFactor, unit: unitLabel(units.area)};
     }
     // 长度
     if (fu === "mm" || fu === "cm" || fu === "m" || fu === "in" || fu === "ft") {
@@ -491,7 +498,7 @@ function FilterPanel({
                         <select value={units.area}
                                 onChange={e => setUnits({...units, area: e.target.value as AreaUnit})}
                                 className="border border-gray-200 rounded-lg px-2 py-1 text-sm">
-                            {AREA_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                            {AREA_UNITS.map(u => <option key={u} value={u}>{unitLabel(u)}</option>)}
                         </select>
                     </div>
 
@@ -501,7 +508,7 @@ function FilterPanel({
                         <select value={units.volume}
                                 onChange={e => setUnits({...units, volume: e.target.value as VolumeUnit})}
                                 className="border border-gray-200 rounded-lg px-2 py-1 text-sm">
-                            {VOLUME_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                            {VOLUME_UNITS.map(u => <option key={u} value={u}>{unitLabel(u)}</option>)}
                         </select>
                     </div>
 
@@ -560,11 +567,6 @@ export default function DashboardPanel() {
     const cv = useCallback((value: number, fromUnit: string) => {
         return convertUnit(value, fromUnit, units, rates);
     }, [units, rates]);
-
-    const cvFmt = useCallback((value: number, fromUnit: string) => {
-        const r = cv(value, fromUnit);
-        return {text: fmtNum(r.value), unit: r.unit};
-    }, [cv]);
 
     const openDetail = (title: string, category: string, metric: string, unit: string) => {
         setDetailView({title, category, metric, unit});
@@ -628,10 +630,10 @@ export default function DashboardPanel() {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <StatCard icon={<BarChart3 className="w-5 h-5 text-blue-500"/>} label={t("dashboard.docs_processed")} value={data.total_documents_processed} unit={t("dashboard.unit_doc")} color="bg-blue-50 border-blue-200"/>
                             <StatCard icon={<BarChart3 className="w-5 h-5 text-indigo-500"/>} label={t("dashboard.pages_processed")} value={data.total_pages_processed} unit={t("dashboard.unit_page")} color="bg-indigo-50 border-indigo-200"/>
-                            <StatCard icon={<ArrowDownCircle className="w-5 h-5 text-emerald-500"/>} label={t("dashboard.log_inbound")} value={cv(data.log_summary.total_inbound_m3, "m³").value} unit={cv(data.log_summary.total_inbound_m3, "m³").unit} color="bg-emerald-50 border-emerald-200"
-                                      onClick={() => openDetail(t("dashboard.inbound_volume"), "log_inbound", "inbound_batch", "m³")}/>
-                            <StatCard icon={<ArrowUpCircle className="w-5 h-5 text-amber-500"/>} label={t("dashboard.log_outbound")} value={cv(data.log_summary.total_outbound_m3, "m³").value} unit={cv(data.log_summary.total_outbound_m3, "m³").unit} color="bg-amber-50 border-amber-200"
-                                      onClick={() => openDetail(t("dashboard.outbound_volume"), "log_outbound", "outbound_batch", "m³")}/>
+                            <StatCard icon={<ArrowDownCircle className="w-5 h-5 text-emerald-500"/>} label={t("dashboard.log_inbound")} value={cv(data.log_summary.total_inbound_m3, "m3").value} unit={cv(data.log_summary.total_inbound_m3, "m3").unit} color="bg-emerald-50 border-emerald-200"
+                                      onClick={() => openDetail(t("dashboard.inbound_volume"), "log_inbound", "inbound_batch", "m3")}/>
+                            <StatCard icon={<ArrowUpCircle className="w-5 h-5 text-amber-500"/>} label={t("dashboard.log_outbound")} value={cv(data.log_summary.total_outbound_m3, "m3").value} unit={cv(data.log_summary.total_outbound_m3, "m3").unit} color="bg-amber-50 border-amber-200"
+                                      onClick={() => openDetail(t("dashboard.outbound_volume"), "log_outbound", "outbound_batch", "m3")}/>
                         </div>
                     </div>
 
@@ -645,7 +647,7 @@ export default function DashboardPanel() {
                             <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.invoices")} value={data.import_summary.total_invoices} color="bg-sky-50 border-sky-200"/>
                             <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.total_amount")} value={cv(data.import_summary.total_amount_eur, "EUR").value} unit={cv(data.import_summary.total_amount_eur, "EUR").unit} color="bg-sky-50 border-sky-200"
                                       onClick={() => openDetail(t("dashboard.total_amount"), "import", "customs_record", "EUR")}/>
-                            <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.total_volume")} value={cv(data.import_summary.total_volume_m3, "m³").value} unit={cv(data.import_summary.total_volume_m3, "m³").unit} color="bg-sky-50 border-sky-200"/>
+                            <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.total_volume")} value={cv(data.import_summary.total_volume_m3, "m3").value} unit={cv(data.import_summary.total_volume_m3, "m3").unit} color="bg-sky-50 border-sky-200"/>
                         </div>
                         {Object.keys(data.import_summary.suppliers).length > 0 && (
                             <div className="mt-3 flex flex-wrap gap-2">
@@ -663,18 +665,18 @@ export default function DashboardPanel() {
                         </h3>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <StatCard icon={<ArrowDownCircle className="w-5 h-5 text-emerald-500"/>} label={t("dashboard.inbound_logs")} value={data.log_summary.total_inbound_logs} unit={t("dashboard.unit_log")} color="bg-emerald-50 border-emerald-200"
-                                      onClick={() => openDetail(t("dashboard.inbound_logs"), "log_inbound", "inbound_batch", "m³")}/>
-                            <StatCard icon={<ArrowDownCircle className="w-5 h-5 text-emerald-500"/>} label={t("dashboard.inbound_volume")} value={cv(data.log_summary.total_inbound_m3, "m³").value} unit={cv(data.log_summary.total_inbound_m3, "m³").unit} color="bg-emerald-50 border-emerald-200"
-                                      onClick={() => openDetail(t("dashboard.inbound_volume"), "log_inbound", "inbound_batch", "m³")}/>
+                                      onClick={() => openDetail(t("dashboard.inbound_logs"), "log_inbound", "inbound_batch", "m3")}/>
+                            <StatCard icon={<ArrowDownCircle className="w-5 h-5 text-emerald-500"/>} label={t("dashboard.inbound_volume")} value={cv(data.log_summary.total_inbound_m3, "m3").value} unit={cv(data.log_summary.total_inbound_m3, "m3").unit} color="bg-emerald-50 border-emerald-200"
+                                      onClick={() => openDetail(t("dashboard.inbound_volume"), "log_inbound", "inbound_batch", "m3")}/>
                             <StatCard icon={<ArrowUpCircle className="w-5 h-5 text-orange-500"/>} label={t("dashboard.outbound_logs")} value={data.log_summary.total_outbound_logs} unit={t("dashboard.unit_log")} color="bg-orange-50 border-orange-200"
-                                      onClick={() => openDetail(t("dashboard.outbound_logs"), "log_outbound", "outbound_batch", "m³")}/>
-                            <StatCard icon={<ArrowUpCircle className="w-5 h-5 text-orange-500"/>} label={t("dashboard.outbound_volume")} value={cv(data.log_summary.total_outbound_m3, "m³").value} unit={cv(data.log_summary.total_outbound_m3, "m³").unit} color="bg-orange-50 border-orange-200"
-                                      onClick={() => openDetail(t("dashboard.outbound_volume"), "log_outbound", "outbound_batch", "m³")}/>
+                                      onClick={() => openDetail(t("dashboard.outbound_logs"), "log_outbound", "outbound_batch", "m3")}/>
+                            <StatCard icon={<ArrowUpCircle className="w-5 h-5 text-orange-500"/>} label={t("dashboard.outbound_volume")} value={cv(data.log_summary.total_outbound_m3, "m3").value} unit={cv(data.log_summary.total_outbound_m3, "m3").unit} color="bg-orange-50 border-orange-200"
+                                      onClick={() => openDetail(t("dashboard.outbound_volume"), "log_outbound", "outbound_batch", "m3")}/>
                         </div>
                         {(data.log_summary.total_inbound_m3 > 0 || data.log_summary.total_outbound_m3 > 0) && (
                             <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm">
                                 <span className="text-gray-600">{t("dashboard.stock")}</span>
-                                <span className="font-bold text-gray-900 ml-1">{fmtNum(cv(data.log_summary.total_inbound_m3 - data.log_summary.total_outbound_m3, "m³").value)} {cv(0, "m³").unit}</span>
+                                <span className="font-bold text-gray-900 ml-1">{fmtNum(cv(data.log_summary.total_inbound_m3 - data.log_summary.total_outbound_m3, "m3").value)} {cv(0, "m3").unit}</span>
                                 <span className="text-gray-500 ml-2">({data.log_summary.total_inbound_logs - data.log_summary.total_outbound_logs} {t("dashboard.unit_log")})</span>
                             </div>
                         )}
@@ -688,17 +690,17 @@ export default function DashboardPanel() {
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                             <StatCard icon={<Package className="w-5 h-5 text-violet-500"/>} label={t("dashboard.soak_pool")}
                                       value={`${data.factory_summary.soak_pool_logs} ${t("dashboard.unit_log")}`}
-                                      unit={data.factory_summary.soak_pool_m3 > 0 ? `/ ${fmtNum(cv(data.factory_summary.soak_pool_m3, "m³").value)} ${cv(0, "m³").unit}` : undefined}
+                                      unit={data.factory_summary.soak_pool_m3 > 0 ? `/ ${fmtNum(cv(data.factory_summary.soak_pool_m3, "m3").value)} ${cv(0, "m3").unit}` : undefined}
                                       color="bg-violet-50 border-violet-200"
                                       onClick={() => openDetail(t("dashboard.soak_pool"), "soak_pool", "soak_pool_batch", "根")}/>
                             <StatCard icon={<Scissors className="w-5 h-5 text-rose-500"/>} label={t("dashboard.slicing")}
                                       value={`${data.factory_summary.slicing_logs} ${t("dashboard.unit_log")}`}
-                                      unit={data.factory_summary.slicing_output_m2 > 0 ? `/ ${fmtNum(cv(data.factory_summary.slicing_output_m2, "m²").value)} ${cv(0, "m²").unit}` : undefined}
+                                      unit={data.factory_summary.slicing_output_m2 > 0 ? `/ ${fmtNum(cv(data.factory_summary.slicing_output_m2, "m2").value)} ${cv(0, "m2").unit}` : undefined}
                                       color="bg-rose-50 border-rose-200"
                                       onClick={() => openDetail(t("dashboard.slicing"), "slicing", "slicing_batch", "根")}/>
                             <StatCard icon={<Package className="w-5 h-5 text-teal-500"/>} label={t("dashboard.packing")}
                                       value={`${data.factory_summary.packing_packages} ${t("dashboard.unit_pack")}`}
-                                      unit={`/ ${data.factory_summary.packing_pieces} ${t("dashboard.unit_piece")} / ${fmtNum(cv(data.factory_summary.packing_area_m2, "m²").value)} ${cv(0, "m²").unit}`}
+                                      unit={`/ ${data.factory_summary.packing_pieces} ${t("dashboard.unit_piece")} / ${fmtNum(cv(data.factory_summary.packing_area_m2, "m2").value)} ${cv(0, "m2").unit}`}
                                       color="bg-teal-50 border-teal-200"
                                       onClick={() => openDetail(t("dashboard.packing"), "packing", "packing_batch", "包")}/>
                         </div>
