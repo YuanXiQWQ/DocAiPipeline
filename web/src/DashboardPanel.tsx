@@ -167,6 +167,8 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
     const [editValue, setEditValue] = useState("");
     const [editDate, setEditDate] = useState("");
     const [editNote, setEditNote] = useState("");
+    /* 批次号搜索 */
+    const [batchSearch, setBatchSearch] = useState("");
     /* 新增行 */
     const [addAfter, setAddAfter] = useState<string | null>(null);
     const [newValue, setNewValue] = useState("");
@@ -178,11 +180,12 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
         getSummaryEntries({
             date_from: dateFrom, date_to: dateTo,
             category, metric,
+            batch_id: batchSearch || undefined,
             include_deleted: showDeleted,
         })
             .then(r => setEntries(r.entries))
             .finally(() => setLoading(false));
-    }, [dateFrom, dateTo, category, metric, showDeleted]);
+    }, [dateFrom, dateTo, category, metric, batchSearch, showDeleted]);
 
     useEffect(() => { fetchEntries(); }, [fetchEntries]);
 
@@ -238,6 +241,9 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
                     <ArrowLeft className="w-4 h-4"/> {t("dashboard.back")}
                 </button>
                 <div className="flex items-center gap-2">
+                    <input type="text" placeholder={t("dashboard.search_batch")} value={batchSearch}
+                           onChange={e => setBatchSearch(e.target.value)}
+                           className="border border-gray-200 rounded-lg px-2 py-1 text-sm w-40"/>
                     <label className="flex items-center gap-1.5 text-xs text-gray-500">
                         <input type="checkbox" checked={showDeleted} onChange={e => setShowDeleted(e.target.checked)} className="rounded"/>
                         {t("dashboard.show_deleted")}
@@ -294,6 +300,7 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
                         <thead>
                         <tr className="bg-gray-50 text-gray-600">
                             <th className="px-4 py-2.5 text-left font-medium">{t("dashboard.entry_date")}</th>
+                            <th className="px-4 py-2.5 text-left font-medium">{t("dashboard.batch_id")}</th>
                             <th className="px-4 py-2.5 text-left font-medium">{t("dashboard.source_file")}</th>
                             <th className="px-4 py-2.5 text-right font-medium">{t("dashboard.entry_value")}</th>
                             <th className="px-4 py-2.5 text-center font-medium w-32"></th>
@@ -307,8 +314,15 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
                                         {editingRow === entry.id ? (
                                             <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} className="border rounded px-2 py-1 text-xs w-36"/>
                                         ) : (
-                                            <span className="text-gray-700">{entry.date}</span>
+                                            <div>
+                                                <span className="text-gray-700">{entry.date}</span>
+                                                <span className="text-gray-400 text-xs ml-1">{entry.created_at.slice(11, 19)}</span>
+                                            </div>
                                         )}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-gray-600">
+                                        {entry.batch_id && <span className="font-mono text-xs">{entry.batch_id}</span>}
+                                        {entry.vehicle_plate && <span className="ml-1.5 px-1 py-0.5 rounded text-xs bg-slate-100 text-slate-500">{entry.vehicle_plate}</span>}
                                     </td>
                                     <td className="px-4 py-2.5 text-gray-600 truncate max-w-[200px]">
                                         <span className={`inline-block px-1.5 py-0.5 rounded text-xs mr-1.5 ${
@@ -364,7 +378,7 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
                                 {/* 修订历史展开 */}
                                 {expandedHistory.has(entry.id) && entry.revisions.length > 0 && (
                                     <tr>
-                                        <td colSpan={4} className="bg-slate-50 px-6 py-3">
+                                        <td colSpan={5} className="bg-slate-50 px-6 py-3">
                                             <p className="text-xs font-medium text-gray-500 mb-2">{t("dashboard.history")}</p>
                                             <div className="space-y-1.5">
                                                 {entry.revisions.map((rev) => (
@@ -389,6 +403,7 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
                                         <td className="px-4 py-2.5">
                                             <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="border rounded px-2 py-1 text-xs w-36"/>
                                         </td>
+                                        <td className="px-4 py-2.5"></td>
                                         <td className="px-4 py-2.5 text-xs text-amber-600">{t("dashboard.manual_entry")}</td>
                                         <td className="px-4 py-2.5">
                                             <input type="number" step="any" placeholder={t("dashboard.entry_value")} value={newValue} onChange={e => setNewValue(e.target.value)}
@@ -480,7 +495,7 @@ function HistoryListView({title, docType, onBack}: {
                         <tbody>
                         {records.map(r => (
                             <tr key={r.id} className="border-t border-gray-100 hover:bg-gray-50">
-                                <td className="px-4 py-2.5 text-gray-700">{r.timestamp.slice(0, 10)}</td>
+                                <td className="px-4 py-2.5 text-gray-700">{r.timestamp.slice(0, 10)} <span className="text-gray-400 text-xs">{r.timestamp.slice(11, 19)}</span></td>
                                 <td className="px-4 py-2.5 text-gray-600 truncate max-w-[250px]">{r.filename}</td>
                                 <td className="px-4 py-2.5">
                                     <span className="px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-600">{t(`doc_type.${r.doc_type}`)}</span>

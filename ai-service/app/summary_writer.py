@@ -102,6 +102,7 @@ def _customs_entries(results: list[dict], filename: str, hid: str, date: str) ->
             source="auto", history_id=hid, filename=filename,
             category="import", metric="customs_record",
             date=doc_date, value=amount, unit="EUR",
+            batch_id=str(fields.get("declaration_number", "")),
             detail={
                 "doc_type_detail": fields.get("document_type", ""),
                 "declaration_number": fields.get("declaration_number", ""),
@@ -129,9 +130,9 @@ def _log_inbound_entries(results: list[dict], filename: str, hid: str, date: str
             source="auto", history_id=hid, filename=filename,
             category="log_inbound", metric="inbound_batch",
             date=pg_date, value=vol, unit="m³",
+            batch_id=str(meta.get("batch_id", "")),
+            vehicle_plate=str(meta.get("vehicle_plate", "")),
             detail={
-                "batch_id": meta.get("batch_id", ""),
-                "vehicle_plate": meta.get("vehicle_plate", ""),
                 "supplier": meta.get("supplier", ""),
                 "species": meta.get("species", ""),
                 "log_count": len(entries),
@@ -152,8 +153,8 @@ def _log_outbound_entries(results: list[dict], filename: str, hid: str, date: st
             source="auto", history_id=hid, filename=filename,
             category="log_outbound", metric="outbound_batch",
             date=pg_date, value=vol, unit="m³",
+            batch_id=str(meta.get("batch_id", "")),
             detail={
-                "batch_id": meta.get("batch_id", ""),
                 "log_count": len(entries),
             },
         ))
@@ -178,8 +179,8 @@ def _soak_pool_entries(results: list[dict], filename: str, hid: str, date: str) 
             source="auto", history_id=hid, filename=filename,
             category="soak_pool", metric="soak_pool_batch",
             date=pg_date, value=len(entries), unit="根",
+            batch_id=str(meta.get("batch_id", "")),
             detail={
-                "batch_id": meta.get("batch_id", ""),
                 "pool_number": meta.get("pool_number", ""),
                 "volume_m3": round(vol, 4),
             },
@@ -199,8 +200,8 @@ def _slicing_entries(results: list[dict], filename: str, hid: str, date: str) ->
             source="auto", history_id=hid, filename=filename,
             category="slicing", metric="slicing_batch",
             date=pg_date, value=len(entries), unit="根",
+            batch_id=str(meta.get("batch_id", "")),
             detail={
-                "batch_id": meta.get("batch_id", ""),
                 "machine_id": meta.get("machine_id", ""),
                 "species": meta.get("species", ""),
                 "output_m2": output_m2,

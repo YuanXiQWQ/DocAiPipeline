@@ -251,6 +251,8 @@ export interface SummaryEntry {
     created_at: string;
     value: number;
     unit: string;
+    batch_id: string;
+    vehicle_plate: string;
     detail: Record<string, unknown>;
     deleted: boolean;
     deleted_at: string;
@@ -267,6 +269,7 @@ export async function getSummaryEntries(params: {
     date_to?: string;
     category?: string;
     metric?: string;
+    batch_id?: string;
     include_deleted?: boolean;
     only_deleted?: boolean;
     source?: string;

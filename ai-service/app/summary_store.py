@@ -50,8 +50,11 @@ class SummaryEntry(BaseModel):
     # 数值
     value: float = 0.0  # 数值
     unit: str = ""  # 单位：EUR / m³ / 根 / 包 / 片 / m²
+    # 批次 / 车牌（顶级字段，便于筛选与展示）
+    batch_id: str = ""  # 入池批次号 / 检尺批次号 / 上机批号等
+    vehicle_plate: str = ""  # 车牌号（检尺单特有）
     # 附加信息（原始数据快照，便于详情展示）
-    detail: dict[str, Any] = {}  # 如 {batch_id, supplier, entries_count, ...}
+    detail: dict[str, Any] = {}  # 如 {supplier, entries_count, ...}
     # 状态
     deleted: bool = False  # 软删除标记
     deleted_at: str = ""  # 软删除时间
@@ -192,6 +195,7 @@ def query_entries(
     date_to: str = "",
     category: str = "",
     metric: str = "",
+    batch_id: str = "",
     include_deleted: bool = False,
     only_deleted: bool = False,
     source: str = "",  # "auto" / "manual" / ""(全部)
@@ -216,6 +220,9 @@ def query_entries(
         if metric and e.metric != metric:
             continue
         if source and e.source != source:
+            continue
+        # 批次号模糊匹配
+        if batch_id and batch_id.lower() not in e.batch_id.lower():
             continue
         result.append(e)
     return result
