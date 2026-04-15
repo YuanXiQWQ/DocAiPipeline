@@ -17,7 +17,7 @@ import {
   type UserSettings,
   type ModelInfo,
 } from "./api";
-import { getCurrentLocale, setLocale, LOCALE_OPTIONS, type Locale } from "./i18n";
+import { getCurrentLocale, setLocale, LOCALE_OPTIONS, useT, type Locale } from "./i18n";
 
 interface Props {
   open: boolean;
@@ -25,6 +25,7 @@ interface Props {
 }
 
 export default function SettingsPanel({ open, onClose }: Props) {
+  const t = useT();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -95,7 +96,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <div className="flex items-center gap-2">
             <SettingsIcon className="w-5 h-5 text-slate-600" />
-            <h2 className="text-lg font-semibold text-slate-800">设置</h2>
+            <h2 className="text-lg font-semibold text-slate-800">{t("settings.title")}</h2>
           </div>
           <button
             onClick={onClose}
@@ -108,18 +109,18 @@ export default function SettingsPanel({ open, onClose }: Props) {
         {loading ? (
           <div className="p-12 text-center">
             <Loader2 className="w-8 h-8 text-blue-500 mx-auto animate-spin" />
-            <p className="text-sm text-slate-500 mt-2">加载设置…</p>
+            <p className="text-sm text-slate-500 mt-2">{t("settings.loading")}</p>
           </div>
         ) : (
           <div className="p-6 space-y-6">
             {/* API Key */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                OpenAI API Key
+                {t("settings.api_key")}
               </label>
               {currentSettings?.openai_api_key_set && (
                 <p className="text-xs text-slate-400 mb-2">
-                  当前: {currentSettings.openai_api_key_masked}（留空保持不变）
+                  {t("settings.api_key_current").replace("{masked}", currentSettings.openai_api_key_masked)}
                 </p>
               )}
               <div className="relative">
@@ -129,7 +130,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder={
                     currentSettings?.openai_api_key_set
-                      ? "留空保持现有 Key"
+                      ? t("settings.api_key_placeholder")
                       : "sk-..."
                   }
                   className="w-full px-4 py-2.5 pr-10 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
@@ -149,7 +150,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
               {!currentSettings?.openai_api_key_set && (
                 <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
-                  尚未设置 API Key，文档识别功能将无法使用
+                  {t("settings.api_key_missing")}
                 </p>
               )}
             </div>
@@ -157,7 +158,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
             {/* 模型选择 */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                识别模型
+                {t("settings.model")}
               </label>
               <div className="space-y-2">
                 {models.map((m) => (
@@ -196,7 +197,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
                       className="text-blue-500 hover:text-blue-700 shrink-0"
-                      title="查看定价"
+                      title={t("settings.view_pricing")}
                     >
                       <ExternalLink className="w-4 h-4" />
                     </a>
@@ -208,21 +209,21 @@ export default function SettingsPanel({ open, onClose }: Props) {
             {/* 自定义 Base URL（高级） */}
             <details className="group">
               <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-700">
-                高级选项
+                {t("settings.advanced")}
               </summary>
               <div className="mt-3">
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  自定义 API Base URL
+                  {t("settings.base_url")}
                 </label>
                 <input
                   type="text"
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder="留空使用 OpenAI 官方 (https://api.openai.com/v1)"
+                  placeholder={t("settings.base_url_placeholder")}
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
                 <p className="text-xs text-slate-400 mt-1">
-                  如使用 Azure、中转代理或兼容 API，在此填写 Base URL
+                  {t("settings.base_url_hint")}
                 </p>
               </div>
             </details>
@@ -230,7 +231,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
             {/* 界面语言 */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                界面语言 / Language
+                {t("settings.language")}
               </label>
               <div className="flex gap-2">
                 {LOCALE_OPTIONS.map((opt) => (
@@ -259,7 +260,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
             {saved && (
               <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-xl px-4 py-3 flex items-center gap-2">
                 <CheckCircle className="w-4 h-4 shrink-0" />
-                设置已保存
+                {t("settings.saved")}
               </div>
             )}
 
@@ -275,7 +276,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
                 ) : (
                   <Save className="w-4 h-4" />
                 )}
-                保存设置
+                {t("settings.save")}
               </button>
             </div>
           </div>

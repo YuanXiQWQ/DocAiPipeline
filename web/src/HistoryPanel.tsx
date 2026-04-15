@@ -22,6 +22,7 @@ import {
   type HistoryStats,
   type HistoryDetail,
 } from "./api";
+import { useT } from "./i18n";
 
 interface HistoryPanelProps {
   onClose: () => void;
@@ -29,6 +30,7 @@ interface HistoryPanelProps {
 }
 
 export default function HistoryPanel({ onClose, onLoadResult }: HistoryPanelProps) {
+  const t = useT();
   const [records, setRecords] = useState<HistorySummary[]>([]);
   const [total, setTotal] = useState(0);
   const [stats, setStats] = useState<HistoryStats | null>(null);
@@ -55,7 +57,7 @@ export default function HistoryPanel({ onClose, onLoadResult }: HistoryPanelProp
       setTotal(listRes.total);
       setStats(statsRes);
     } catch (err) {
-      console.error("获取历史记录失败:", extractErrorMessage(err));
+      console.error("fetch history failed:", extractErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -66,12 +68,12 @@ export default function HistoryPanel({ onClose, onLoadResult }: HistoryPanelProp
   }, [fetchData]);
 
   const handleDelete = async (id: string) => {
-    if (!confirm("确定删除此记录？")) return;
+    if (!confirm(t("history.delete_confirm"))) return;
     try {
       await deleteHistory(id);
       await fetchData();
     } catch (err) {
-      alert("删除失败: " + extractErrorMessage(err));
+      alert(extractErrorMessage(err));
     }
   };
 
@@ -80,7 +82,7 @@ export default function HistoryPanel({ onClose, onLoadResult }: HistoryPanelProp
       const d = await getHistoryDetail(id);
       setDetail(d);
     } catch (err) {
-      alert("获取详情失败: " + extractErrorMessage(err));
+      alert(extractErrorMessage(err));
     }
   };
 
@@ -131,7 +133,7 @@ export default function HistoryPanel({ onClose, onLoadResult }: HistoryPanelProp
                   }}
                   className="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
                 >
-                  加载到复核
+                  {t("history.load")}
                 </button>
               )}
               <button
@@ -148,20 +150,20 @@ export default function HistoryPanel({ onClose, onLoadResult }: HistoryPanelProp
             {/* 元信息 */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-xs text-gray-500">页数</p>
+                <p className="text-xs text-gray-500">{t("history.detail_pages")}</p>
                 <p className="text-lg font-semibold">{detail.pages}</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-xs text-gray-500">识别记录数</p>
+                <p className="text-xs text-gray-500">{t("history.detail_records")}</p>
                 <p className="text-lg font-semibold">{detail.record_count}</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-xs text-gray-500">已填充</p>
-                <p className="text-lg font-semibold">{detail.filled ? "✅ 是" : "否"}</p>
+                <p className="text-xs text-gray-500">{t("history.detail_filled")}</p>
+                <p className="text-lg font-semibold">{detail.filled ? t("history.detail_filled_yes") : t("history.detail_filled_no")}</p>
               </div>
               {detail.fill_filename && (
                 <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500">Excel 文件</p>
+                  <p className="text-xs text-gray-500">{t("history.detail_excel")}</p>
                   <p className="text-sm font-medium truncate">{detail.fill_filename}</p>
                 </div>
               )}
@@ -170,7 +172,7 @@ export default function HistoryPanel({ onClose, onLoadResult }: HistoryPanelProp
             {/* 警告 */}
             {detail.warnings.length > 0 && (
               <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <p className="text-sm font-medium text-amber-800 mb-1">警告</p>
+                <p className="text-sm font-medium text-amber-800 mb-1">{t("history.detail_warnings")}</p>
                 {detail.warnings.map((w, i) => (
                   <p key={i} className="text-sm text-amber-700">{w}</p>
                 ))}
@@ -179,7 +181,7 @@ export default function HistoryPanel({ onClose, onLoadResult }: HistoryPanelProp
 
             {/* 识别结果 JSON */}
             <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">识别结果</p>
+              <p className="text-sm font-medium text-gray-700 mb-2">{t("history.detail_results")}</p>
               <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 text-xs overflow-x-auto max-h-96">
                 {JSON.stringify(detail.results, null, 2)}
               </pre>
@@ -198,10 +200,10 @@ export default function HistoryPanel({ onClose, onLoadResult }: HistoryPanelProp
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <div className="flex items-center gap-3">
             <Clock className="w-6 h-6 text-blue-600" />
-            <h2 className="text-lg font-semibold text-gray-900">处理历史</h2>
+            <h2 className="text-lg font-semibold text-gray-900">{t("history.title")}</h2>
             {stats && (
               <span className="text-sm text-gray-500">
-                共 {stats.total_records} 条 · 近7天 {stats.recent_7_days} 条
+                {t("history.total").replace("{n}", String(stats.total_records))} · {t("history.recent").replace("{n}", String(stats.recent_7_days))}
               </span>
             )}
           </div>
@@ -219,12 +221,12 @@ export default function HistoryPanel({ onClose, onLoadResult }: HistoryPanelProp
             <div className="flex gap-6 text-sm">
               <div className="flex items-center gap-1.5">
                 <BarChart3 className="w-4 h-4 text-blue-500" />
-                <span className="text-gray-600">总页数</span>
+                <span className="text-gray-600">{t("history.total_pages")}</span>
                 <span className="font-semibold">{stats.total_pages_processed}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <FileText className="w-4 h-4 text-emerald-500" />
-                <span className="text-gray-600">总记录</span>
+                <span className="text-gray-600">{t("history.total_records")}</span>
                 <span className="font-semibold">{stats.total_entries_extracted}</span>
               </div>
               {Object.entries(stats.by_doc_type).map(([type, count]) => (
@@ -243,7 +245,7 @@ export default function HistoryPanel({ onClose, onLoadResult }: HistoryPanelProp
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="搜索文件名..."
+              placeholder={t("history.search")}
               value={keyword}
               onChange={(e) => {
                 setKeyword(e.target.value);
@@ -260,7 +262,7 @@ export default function HistoryPanel({ onClose, onLoadResult }: HistoryPanelProp
             }}
             className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
           >
-            <option value="">全部类型</option>
+            <option value="">{t("history.all_types")}</option>
             {Object.entries(DOC_TYPE_LABELS)
               .filter(([k]) => k !== "auto")
               .map(([k, v]) => (
@@ -278,8 +280,8 @@ export default function HistoryPanel({ onClose, onLoadResult }: HistoryPanelProp
           ) : records.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-gray-400">
               <Clock className="w-12 h-12 mb-3" />
-              <p className="text-lg">暂无处理历史</p>
-              <p className="text-sm">上传并处理文档后，记录将自动保存在这里</p>
+              <p className="text-lg">{t("history.empty")}</p>
+              <p className="text-sm">{t("history.empty_hint")}</p>
             </div>
           ) : (
             <div className="divide-y divide-gray-100">
@@ -300,8 +302,8 @@ export default function HistoryPanel({ onClose, onLoadResult }: HistoryPanelProp
                       <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded">
                         {DOC_TYPE_LABELS[r.doc_type]?.split("（")[0] || r.doc_type}
                       </span>
-                      <span>{r.pages} 页</span>
-                      <span>{r.record_count} 条记录</span>
+                      <span>{r.pages} {t("history.pages_unit")}</span>
+                      <span>{r.record_count} {t("history.records_unit")}</span>
                       <span>{formatTime(r.timestamp)}</span>
                     </div>
                   </div>
@@ -324,7 +326,7 @@ export default function HistoryPanel({ onClose, onLoadResult }: HistoryPanelProp
         {totalPages > 1 && (
           <div className="px-6 py-3 border-t border-gray-200 flex items-center justify-between text-sm">
             <span className="text-gray-500">
-              第 {currentPage}/{totalPages} 页 · 共 {total} 条
+              {t("history.page_info").replace("{current}", String(currentPage)).replace("{total}", String(totalPages)).replace("{count}", String(total))}
             </span>
             <div className="flex gap-2">
               <button

@@ -184,8 +184,8 @@ Look at the document image and classify it into exactly ONE of these types:
 5. "slicing" — 刨切木方上机表: Slicing machine daily report (often rotated 90°)
 6. "packing" — 表板打包报表: Veneer packing report with package IDs, grades, dimensions
 
-Reply in JSON:
-{"doc_type": "<type>", "confidence": "high|medium|low", "description": "<brief reason>"}
+Reply in JSON (description 用中文):
+{"doc_type": "<type>", "confidence": "high|medium|low", "description": "<用中文简述分类理由>"}
 """
 
 
@@ -285,6 +285,11 @@ async def process_document(
             pipeline_result = pipeline.process(save_path)
             results = [r.model_dump() for r in pipeline_result.records]
             warnings = pipeline_result.warnings
+            # 为每页保存 crop 图片
+            for i, img in enumerate(images):
+                crop_path = _save_crop(img, filename, i + 1)
+                if i < len(results):
+                    results[i]["crop_image_path"] = crop_path
 
         elif actual_type == "log_measurement":
             # Phase 2: 检尺单

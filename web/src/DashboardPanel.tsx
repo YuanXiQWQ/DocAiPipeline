@@ -15,6 +15,7 @@ import {
   extractErrorMessage,
   type OverallSummary,
 } from "./api";
+import { useT } from "./i18n";
 
 interface DashboardPanelProps {
   onClose: () => void;
@@ -48,6 +49,7 @@ function StatCard({
 }
 
 export default function DashboardPanel({ onClose }: DashboardPanelProps) {
+  const t = useT();
   const [data, setData] = useState<OverallSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +69,7 @@ export default function DashboardPanel({ onClose }: DashboardPanelProps) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <div className="flex items-center gap-3">
             <BarChart3 className="w-6 h-6 text-blue-600" />
-            <h2 className="text-lg font-semibold text-gray-900">数据汇总看板</h2>
+            <h2 className="text-lg font-semibold text-gray-900">{t("dashboard.title")}</h2>
           </div>
           <button
             onClick={onClose}
@@ -90,33 +92,33 @@ export default function DashboardPanel({ onClose }: DashboardPanelProps) {
               {/* 总览 */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                  总览
+                  {t("dashboard.overview")}
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <StatCard
                     icon={<BarChart3 className="w-5 h-5 text-blue-500" />}
-                    label="已处理文档"
+                    label={t("dashboard.docs_processed")}
                     value={data.total_documents_processed}
-                    unit="份"
+                    unit={t("dashboard.unit_doc")}
                     color="bg-blue-50 border-blue-200"
                   />
                   <StatCard
                     icon={<BarChart3 className="w-5 h-5 text-indigo-500" />}
-                    label="已处理页数"
+                    label={t("dashboard.pages_processed")}
                     value={data.total_pages_processed}
-                    unit="页"
+                    unit={t("dashboard.unit_page")}
                     color="bg-indigo-50 border-indigo-200"
                   />
                   <StatCard
                     icon={<ArrowDownCircle className="w-5 h-5 text-emerald-500" />}
-                    label="原木入库"
+                    label={t("dashboard.log_inbound")}
                     value={data.log_summary.total_inbound_m3}
                     unit="m³"
                     color="bg-emerald-50 border-emerald-200"
                   />
                   <StatCard
                     icon={<ArrowUpCircle className="w-5 h-5 text-amber-500" />}
-                    label="原木出库"
+                    label={t("dashboard.log_outbound")}
                     value={data.log_summary.total_outbound_m3}
                     unit="m³"
                     color="bg-amber-50 border-amber-200"
@@ -128,31 +130,31 @@ export default function DashboardPanel({ onClose }: DashboardPanelProps) {
               <div>
                 <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
                   <Truck className="w-4 h-4" />
-                  进口采购
+                  {t("dashboard.import")}
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <StatCard
                     icon={<Truck className="w-5 h-5 text-sky-500" />}
-                    label="批次数"
+                    label={t("dashboard.batches")}
                     value={data.import_summary.total_batches}
                     color="bg-sky-50 border-sky-200"
                   />
                   <StatCard
                     icon={<Truck className="w-5 h-5 text-sky-500" />}
-                    label="发票数"
+                    label={t("dashboard.invoices")}
                     value={data.import_summary.total_invoices}
                     color="bg-sky-50 border-sky-200"
                   />
                   <StatCard
                     icon={<Truck className="w-5 h-5 text-sky-500" />}
-                    label="总金额"
+                    label={t("dashboard.total_amount")}
                     value={data.import_summary.total_amount_eur}
                     unit="EUR"
                     color="bg-sky-50 border-sky-200"
                   />
                   <StatCard
                     icon={<Truck className="w-5 h-5 text-sky-500" />}
-                    label="总体积"
+                    label={t("dashboard.total_volume")}
                     value={data.import_summary.total_volume_m3}
                     unit="m³"
                     color="bg-sky-50 border-sky-200"
@@ -176,33 +178,33 @@ export default function DashboardPanel({ onClose }: DashboardPanelProps) {
               <div>
                 <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
                   <TreePine className="w-4 h-4" />
-                  原木进销存
+                  {t("dashboard.log")}
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <StatCard
                     icon={<ArrowDownCircle className="w-5 h-5 text-emerald-500" />}
-                    label="入库根数"
+                    label={t("dashboard.inbound_logs")}
                     value={data.log_summary.total_inbound_logs}
-                    unit="根"
+                    unit={t("dashboard.unit_log")}
                     color="bg-emerald-50 border-emerald-200"
                   />
                   <StatCard
                     icon={<ArrowDownCircle className="w-5 h-5 text-emerald-500" />}
-                    label="入库体积"
+                    label={t("dashboard.inbound_volume")}
                     value={data.log_summary.total_inbound_m3}
                     unit="m³"
                     color="bg-emerald-50 border-emerald-200"
                   />
                   <StatCard
                     icon={<ArrowUpCircle className="w-5 h-5 text-orange-500" />}
-                    label="出库根数"
+                    label={t("dashboard.outbound_logs")}
                     value={data.log_summary.total_outbound_logs}
-                    unit="根"
+                    unit={t("dashboard.unit_log")}
                     color="bg-orange-50 border-orange-200"
                   />
                   <StatCard
                     icon={<ArrowUpCircle className="w-5 h-5 text-orange-500" />}
-                    label="出库体积"
+                    label={t("dashboard.outbound_volume")}
                     value={data.log_summary.total_outbound_m3}
                     unit="m³"
                     color="bg-orange-50 border-orange-200"
@@ -211,12 +213,12 @@ export default function DashboardPanel({ onClose }: DashboardPanelProps) {
                 {/* 库存概览 */}
                 {(data.log_summary.total_inbound_m3 > 0 || data.log_summary.total_outbound_m3 > 0) && (
                   <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm">
-                    <span className="text-gray-600">当前库存（入-出）：</span>
+                    <span className="text-gray-600">{t("dashboard.stock")}</span>
                     <span className="font-bold text-gray-900 ml-1">
                       {(data.log_summary.total_inbound_m3 - data.log_summary.total_outbound_m3).toFixed(2)} m³
                     </span>
                     <span className="text-gray-500 ml-2">
-                      ({data.log_summary.total_inbound_logs - data.log_summary.total_outbound_logs} 根)
+                      ({data.log_summary.total_inbound_logs - data.log_summary.total_outbound_logs} {t("dashboard.unit_log")})
                     </span>
                   </div>
                 )}
@@ -226,28 +228,28 @@ export default function DashboardPanel({ onClose }: DashboardPanelProps) {
               <div>
                 <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
                   <Scissors className="w-4 h-4" />
-                  工厂加工
+                  {t("dashboard.factory")}
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <StatCard
                     icon={<Package className="w-5 h-5 text-violet-500" />}
-                    label="入池"
-                    value={`${data.factory_summary.soak_pool_logs} 根`}
+                    label={t("dashboard.soak_pool")}
+                    value={`${data.factory_summary.soak_pool_logs} ${t("dashboard.unit_log")}`}
                     unit={data.factory_summary.soak_pool_m3 > 0 ? `/ ${data.factory_summary.soak_pool_m3.toFixed(2)} m³` : undefined}
                     color="bg-violet-50 border-violet-200"
                   />
                   <StatCard
                     icon={<Scissors className="w-5 h-5 text-rose-500" />}
-                    label="刨切上机"
-                    value={`${data.factory_summary.slicing_logs} 根`}
+                    label={t("dashboard.slicing")}
+                    value={`${data.factory_summary.slicing_logs} ${t("dashboard.unit_log")}`}
                     unit={data.factory_summary.slicing_output_m2 > 0 ? `/ ${data.factory_summary.slicing_output_m2.toFixed(2)} m²` : undefined}
                     color="bg-rose-50 border-rose-200"
                   />
                   <StatCard
                     icon={<Package className="w-5 h-5 text-teal-500" />}
-                    label="打包"
-                    value={`${data.factory_summary.packing_packages} 包`}
-                    unit={`/ ${data.factory_summary.packing_pieces} 片 / ${data.factory_summary.packing_area_m2.toFixed(2)} m²`}
+                    label={t("dashboard.packing")}
+                    value={`${data.factory_summary.packing_packages} ${t("dashboard.unit_pack")}`}
+                    unit={`/ ${data.factory_summary.packing_pieces} ${t("dashboard.unit_piece")} / ${data.factory_summary.packing_area_m2.toFixed(2)} m²`}
                     color="bg-teal-50 border-teal-200"
                   />
                 </div>
@@ -257,8 +259,8 @@ export default function DashboardPanel({ onClose }: DashboardPanelProps) {
               {data.total_documents_processed === 0 && (
                 <div className="text-center py-10 text-gray-400">
                   <BarChart3 className="w-12 h-12 mx-auto mb-3" />
-                  <p className="text-lg">暂无数据</p>
-                  <p className="text-sm">处理文档后，汇总数据将自动更新</p>
+                  <p className="text-lg">{t("dashboard.empty")}</p>
+                  <p className="text-sm">{t("dashboard.empty_hint")}</p>
                 </div>
               )}
             </div>
