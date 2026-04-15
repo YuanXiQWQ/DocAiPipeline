@@ -27,6 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.config import AVAILABLE_MODELS, settings
+from app.db import init_db
 from app.pipeline import Pipeline
 from app.routers import fill, history_router, process, summary
 from app.schemas import HealthResponse, PipelineResult
@@ -47,6 +48,7 @@ def _get_pipeline() -> Pipeline:
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """应用生命周期：启动时初始化目录与日志。"""
     settings.ensure_dirs()
+    init_db()
     logger.info("DocAI Pipeline service started")
     logger.info(f"Output dir: {settings.output_dir}")
     logger.info(f"VLM model: {settings.openai_model}")

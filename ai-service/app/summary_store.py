@@ -3,7 +3,7 @@
 每条明细行（SummaryEntry）对应一个可量化的数据点，如一票进口单据、
 一批入库原木、一次入池操作等。所有编辑以追加方式记录修订历史，不丢失任何痕迹。
 
-存储格式：output/summary_entries.json — 单文件 JSON 数组。
+存储后端：SQLite（output/docai.db — summary_entries + entry_revisions 表）。
 """
 
 from __future__ import annotations
@@ -11,17 +11,16 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from app.config import settings
+from app.db import get_conn
 
 
 # ------------------------------------------------------------------
-# 数据模型
+# 数据模型（保持不变，供 router / writer 引用）
 # ------------------------------------------------------------------
 
 
@@ -63,55 +62,69 @@ class SummaryEntry(BaseModel):
 
 
 # ------------------------------------------------------------------
-# 存储操作
+# 内部工具
 # ------------------------------------------------------------------
 
 
-def _store_path() -> Path:
-    """汇总明细文件路径。"""
-    d = Path(settings.output_dir)
-    d.mkdir(parents=True, exist_ok=True)
-    return d / "summary_entries.json"
+def _row_to_entry(row: Any) -> SummaryEntry:
+    """将 sqlite3.Row 转为 SummaryEntry（含修订历史）。"""
+    d = dict(row)
+    d["detail"] = json.loads(d.get("detail") or "{}")
+    d["deleted"] = bool(d.get("deleted"))
+    # 加载修订历史
+    conn = get_conn()
+    revs = conn.execute(
+        "SELECT * FROM entry_revisions WHERE entry_id=? ORDER BY timestamp",
+        (d["id"],),
+    ).fetchall()
+    d["revisions"] = [
+        {
+            "revision_id": r["revision_id"],
+            "timestamp": r["timestamp"],
+            "author": r["author"],
+            "changes": json.loads(r["changes"] or "{}"),
+            "note": r["note"],
+        }
+        for r in revs
+    ]
+    return SummaryEntry.model_validate(d)
 
 
-def _load_all() -> list[dict[str, Any]]:
-    """加载所有明细行原始 JSON。"""
-    p = _store_path()
-    if not p.exists():
-        return []
-    try:
-        data = json.loads(p.read_text("utf-8"))
-        return data if isinstance(data, list) else []
-    except (json.JSONDecodeError, OSError):
-        return []
-
-
-def _save_all(entries: list[dict[str, Any]]) -> None:
-    """保存所有明细行。"""
-    p = _store_path()
-    p.write_text(
-        json.dumps(entries, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+def _insert_entry(conn: Any, entry: SummaryEntry) -> None:
+    """INSERT 一条 entry（不含 revisions）。"""
+    conn.execute(
+        """INSERT INTO summary_entries
+           (id, source, history_id, filename, category, metric,
+            date, created_at, value, unit, batch_id, vehicle_plate,
+            detail, deleted, deleted_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (
+            entry.id, entry.source, entry.history_id, entry.filename,
+            entry.category, entry.metric, entry.date, entry.created_at,
+            entry.value, entry.unit, entry.batch_id, entry.vehicle_plate,
+            json.dumps(entry.detail, ensure_ascii=False),
+            1 if entry.deleted else 0, entry.deleted_at,
+        ),
     )
+
+
+# ------------------------------------------------------------------
+# 公共 API（签名保持不变）
+# ------------------------------------------------------------------
 
 
 def load_entries() -> list[SummaryEntry]:
     """加载并解析所有明细行。"""
-    raw = _load_all()
-    result = []
-    for item in raw:
-        try:
-            result.append(SummaryEntry.model_validate(item))
-        except Exception:
-            continue
-    return result
+    conn = get_conn()
+    rows = conn.execute("SELECT * FROM summary_entries ORDER BY created_at DESC").fetchall()
+    return [_row_to_entry(r) for r in rows]
 
 
 def save_entry(entry: SummaryEntry) -> SummaryEntry:
     """新增一条明细行。"""
-    entries = _load_all()
-    entries.append(entry.model_dump())
-    _save_all(entries)
+    conn = get_conn()
+    _insert_entry(conn, entry)
+    conn.commit()
     logger.info(f"汇总明细已新增: {entry.id} ({entry.category}/{entry.metric})")
     return entry
 
@@ -120,42 +133,73 @@ def save_entries_batch(new_entries: list[SummaryEntry]) -> int:
     """批量新增明细行。"""
     if not new_entries:
         return 0
-    entries = _load_all()
+    conn = get_conn()
     for e in new_entries:
-        entries.append(e.model_dump())
-    _save_all(entries)
+        _insert_entry(conn, e)
+    conn.commit()
     logger.info(f"汇总明细批量新增: {len(new_entries)} 条")
     return len(new_entries)
 
 
 def update_entry(entry_id: str, updates: dict[str, Any], author: str = "user", note: str = "") -> SummaryEntry | None:
     """更新一条明细行，自动记录修订历史。"""
-    entries = _load_all()
-    for i, raw in enumerate(entries):
-        if raw.get("id") == entry_id:
-            # 记录变更
-            changes = {}
-            for k, v in updates.items():
-                if k in ("id", "revisions", "created_at", "source", "history_id"):
-                    continue  # 不允许改这些字段
-                old_val = raw.get(k)
-                if old_val != v:
-                    changes[k] = {"old": old_val, "new": v}
-                    raw[k] = v
-            if changes:
-                revision = EntryRevision(
-                    author=author,
-                    changes=changes,
-                    note=note,
-                )
-                if "revisions" not in raw:
-                    raw["revisions"] = []
-                raw["revisions"].append(revision.model_dump())
-            entries[i] = raw
-            _save_all(entries)
-            logger.info(f"汇总明细已更新: {entry_id}, 变更: {list(changes.keys())}")
-            return SummaryEntry.model_validate(raw)
-    return None
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM summary_entries WHERE id=?", (entry_id,)).fetchone()
+    if row is None:
+        return None
+
+    current = dict(row)
+    changes: dict[str, Any] = {}
+    set_clauses: list[str] = []
+    params: list[Any] = []
+
+    for k, v in updates.items():
+        if k in ("id", "revisions", "created_at", "source", "history_id"):
+            continue
+        # detail 需要 JSON 序列化比较
+        if k == "detail":
+            old_val = json.loads(current.get("detail") or "{}")
+            if old_val != v:
+                changes[k] = {"old": old_val, "new": v}
+                set_clauses.append("detail=?")
+                params.append(json.dumps(v, ensure_ascii=False))
+        elif k == "deleted":
+            old_val = bool(current.get("deleted"))
+            if old_val != v:
+                changes[k] = {"old": old_val, "new": v}
+                set_clauses.append("deleted=?")
+                params.append(1 if v else 0)
+        else:
+            old_val = current.get(k)
+            if old_val != v:
+                changes[k] = {"old": old_val, "new": v}
+                set_clauses.append(f"{k}=?")
+                params.append(v)
+
+    if set_clauses:
+        params.append(entry_id)
+        conn.execute(
+            f"UPDATE summary_entries SET {', '.join(set_clauses)} WHERE id=?",
+            params,
+        )
+
+    if changes:
+        revision = EntryRevision(author=author, changes=changes, note=note)
+        conn.execute(
+            """INSERT INTO entry_revisions
+               (revision_id, entry_id, timestamp, author, changes, note)
+               VALUES (?,?,?,?,?,?)""",
+            (
+                revision.revision_id, entry_id, revision.timestamp,
+                revision.author,
+                json.dumps(revision.changes, ensure_ascii=False),
+                revision.note,
+            ),
+        )
+
+    conn.commit()
+    logger.info(f"汇总明细已更新: {entry_id}, 变更: {list(changes.keys())}")
+    return get_entry(entry_id)
 
 
 def soft_delete_entry(entry_id: str, author: str = "user") -> SummaryEntry | None:
@@ -180,13 +224,11 @@ def restore_entry(entry_id: str, author: str = "user") -> SummaryEntry | None:
 
 def get_entry(entry_id: str) -> SummaryEntry | None:
     """获取单条明细行。"""
-    for raw in _load_all():
-        if raw.get("id") == entry_id:
-            try:
-                return SummaryEntry.model_validate(raw)
-            except Exception:
-                return None
-    return None
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM summary_entries WHERE id=?", (entry_id,)).fetchone()
+    if row is None:
+        return None
+    return _row_to_entry(row)
 
 
 def query_entries(
@@ -198,31 +240,41 @@ def query_entries(
     batch_id: str = "",
     include_deleted: bool = False,
     only_deleted: bool = False,
-    source: str = "",  # "auto" / "manual" / ""(全部)
+    source: str = "",
 ) -> list[SummaryEntry]:
     """按条件查询明细行。"""
-    all_entries = load_entries()
-    result = []
-    for e in all_entries:
-        # 删除过滤
-        if only_deleted and not e.deleted:
-            continue
-        if not include_deleted and not only_deleted and e.deleted:
-            continue
-        # 日期范围
-        if date_from and e.date < date_from:
-            continue
-        if date_to and e.date > date_to:
-            continue
-        # 分类过滤
-        if category and e.category != category:
-            continue
-        if metric and e.metric != metric:
-            continue
-        if source and e.source != source:
-            continue
-        # 批次号模糊匹配
-        if batch_id and batch_id.lower() not in e.batch_id.lower():
-            continue
-        result.append(e)
-    return result
+    conn = get_conn()
+    clauses: list[str] = []
+    params: list[Any] = []
+
+    # 删除过滤
+    if only_deleted:
+        clauses.append("deleted=1")
+    elif not include_deleted:
+        clauses.append("deleted=0")
+
+    if date_from:
+        clauses.append("date>=?")
+        params.append(date_from)
+    if date_to:
+        clauses.append("date<=?")
+        params.append(date_to)
+    if category:
+        clauses.append("category=?")
+        params.append(category)
+    if metric:
+        clauses.append("metric=?")
+        params.append(metric)
+    if source:
+        clauses.append("source=?")
+        params.append(source)
+    if batch_id:
+        clauses.append("batch_id LIKE ?")
+        params.append(f"%{batch_id}%")
+
+    where = " AND ".join(clauses) if clauses else "1"
+    rows = conn.execute(
+        f"SELECT * FROM summary_entries WHERE {where} ORDER BY created_at DESC",
+        params,
+    ).fetchall()
+    return [_row_to_entry(r) for r in rows]

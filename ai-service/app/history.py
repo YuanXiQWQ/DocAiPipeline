@@ -1,7 +1,6 @@
 """处理历史记录持久化：每次文档处理完成后自动保存记录。
 
-存储格式：output/history/ 目录下的 JSON 文件，每条记录一个文件。
-文件名格式：{timestamp}_{doc_type}_{filename_hash}.json
+存储后端：SQLite（output/docai.db — history_records 表）。
 
 提供查询接口：列表（分页/筛选）、单条详情、统计汇总。
 """
@@ -11,17 +10,16 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from loguru import logger
 from pydantic import BaseModel
 
-from app.config import settings
+from app.db import get_conn
 
 
 # ------------------------------------------------------------------
-# 数据模型
+# 数据模型（保持不变）
 # ------------------------------------------------------------------
 
 
@@ -61,15 +59,8 @@ class HistoryStats(BaseModel):
 
 
 # ------------------------------------------------------------------
-# 存储工具
+# 内部工具
 # ------------------------------------------------------------------
-
-
-def _history_dir() -> Path:
-    """历史记录存储目录。"""
-    d = Path(settings.output_dir) / "history"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
 
 
 def _make_id(doc_type: str, filename: str) -> str:
@@ -77,6 +68,36 @@ def _make_id(doc_type: str, filename: str) -> str:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     h = hashlib.md5(f"{filename}_{ts}".encode()).hexdigest()[:6]
     return f"{ts}_{doc_type}_{h}"
+
+
+def _row_to_record(row: Any) -> HistoryRecord:
+    """sqlite3.Row → HistoryRecord。"""
+    d = dict(row)
+    d["warnings"] = json.loads(d.get("warnings") or "[]")
+    d["results"] = json.loads(d.get("results") or "[]")
+    d["filled"] = bool(d.get("filled"))
+    return HistoryRecord.model_validate(d)
+
+
+def _row_to_summary(row: Any) -> HistorySummary:
+    """sqlite3.Row → HistorySummary（不含 results）。"""
+    d = dict(row)
+    d["filled"] = bool(d.get("filled"))
+    return HistorySummary(
+        id=d["id"],
+        timestamp=d.get("timestamp", ""),
+        doc_type=d.get("doc_type", ""),
+        filename=d.get("filename", ""),
+        pages=d.get("pages", 0),
+        record_count=d.get("record_count", 0),
+        filled=d["filled"],
+        fill_filename=d.get("fill_filename", ""),
+    )
+
+
+# ------------------------------------------------------------------
+# 公共 API（签名保持不变）
+# ------------------------------------------------------------------
 
 
 def save_record(
@@ -88,9 +109,10 @@ def save_record(
 ) -> HistoryRecord:
     """保存一条处理历史记录。"""
     record_id = _make_id(doc_type, filename)
+    now = datetime.now().isoformat()
     record = HistoryRecord(
         id=record_id,
-        timestamp=datetime.now().isoformat(),
+        timestamp=now,
         doc_type=doc_type,
         filename=filename,
         pages=pages,
@@ -98,25 +120,34 @@ def save_record(
         warnings=warnings or [],
         results=results,
     )
-    path = _history_dir() / f"{record_id}.json"
-    path.write_text(
-        record.model_dump_json(indent=2),
-        encoding="utf-8",
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO history_records
+           (id, timestamp, doc_type, filename, pages, record_count,
+            warnings, results, filled, fill_filename)
+           VALUES (?,?,?,?,?,?,?,?,?,?)""",
+        (
+            record.id, record.timestamp, record.doc_type, record.filename,
+            record.pages, record.record_count,
+            json.dumps(record.warnings, ensure_ascii=False),
+            json.dumps(record.results, ensure_ascii=False),
+            0, "",
+        ),
     )
+    conn.commit()
     logger.info(f"历史记录已保存: {record_id} ({doc_type}, {filename})")
     return record
 
 
 def mark_filled(record_id: str, fill_filename: str) -> bool:
     """标记某条历史记录已填充到 Excel。"""
-    path = _history_dir() / f"{record_id}.json"
-    if not path.exists():
-        return False
-    data = json.loads(path.read_text("utf-8"))
-    data["filled"] = True
-    data["fill_filename"] = fill_filename
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    return True
+    conn = get_conn()
+    cur = conn.execute(
+        "UPDATE history_records SET filled=1, fill_filename=? WHERE id=?",
+        (fill_filename, record_id),
+    )
+    conn.commit()
+    return cur.rowcount > 0
 
 
 def list_records(
@@ -127,101 +158,83 @@ def list_records(
         keyword: str = "",
 ) -> tuple[list[HistorySummary], int]:
     """列出历史记录（按时间倒序），返回 (列表, 总数)。"""
-    hdir = _history_dir()
-    files = sorted(hdir.glob("*.json"), reverse=True)
+    conn = get_conn()
+    clauses: list[str] = []
+    params: list[Any] = []
 
-    # 筛选
-    filtered: list[Path] = []
-    for f in files:
-        if doc_type:
-            # 文件名包含 doc_type
-            if f"_{doc_type}_" not in f.name:
-                continue
-        if keyword:
-            # 快速检查文件名是否包含关键字
-            content = f.read_text("utf-8")
-            if keyword.lower() not in content.lower():
-                continue
-        filtered.append(f)
+    if doc_type:
+        clauses.append("doc_type=?")
+        params.append(doc_type)
+    if keyword:
+        clauses.append("(filename LIKE ? OR results LIKE ?)")
+        kw = f"%{keyword}%"
+        params.extend([kw, kw])
 
-    total = len(filtered)
-    page = filtered[offset: offset + limit]
+    where = " AND ".join(clauses) if clauses else "1"
 
-    summaries: list[HistorySummary] = []
-    for f in page:
-        try:
-            data = json.loads(f.read_text("utf-8"))
-            summaries.append(HistorySummary(
-                id=data.get("id", f.stem),
-                timestamp=data.get("timestamp", ""),
-                doc_type=data.get("doc_type", ""),
-                filename=data.get("filename", ""),
-                pages=data.get("pages", 0),
-                record_count=data.get("record_count", 0),
-                filled=data.get("filled", False),
-                fill_filename=data.get("fill_filename", ""),
-            ))
-        except (json.JSONDecodeError, OSError) as e:
-            logger.warning(f"读取历史记录失败: {f.name}: {e}")
+    # 总数
+    total = conn.execute(
+        f"SELECT COUNT(*) FROM history_records WHERE {where}", params,
+    ).fetchone()[0]
 
+    # 分页
+    rows = conn.execute(
+        f"""SELECT id, timestamp, doc_type, filename, pages, record_count, filled, fill_filename
+            FROM history_records WHERE {where}
+            ORDER BY timestamp DESC LIMIT ? OFFSET ?""",
+        params + [limit, offset],
+    ).fetchall()
+
+    summaries = [_row_to_summary(r) for r in rows]
     return summaries, total
 
 
 def get_record(record_id: str) -> HistoryRecord | None:
     """获取单条历史记录详情。"""
-    path = _history_dir() / f"{record_id}.json"
-    if not path.exists():
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM history_records WHERE id=?", (record_id,)).fetchone()
+    if row is None:
         return None
-    try:
-        data = json.loads(path.read_text("utf-8"))
-        return HistoryRecord.model_validate(data)
-    except (json.JSONDecodeError, OSError, ValueError) as e:
-        logger.warning(f"读取历史记录失败: {record_id}: {e}")
-        return None
+    return _row_to_record(row)
 
 
 def delete_record(record_id: str) -> bool:
     """删除单条历史记录。"""
-    path = _history_dir() / f"{record_id}.json"
-    if not path.exists():
-        return False
-    path.unlink()
-    logger.info(f"历史记录已删除: {record_id}")
-    return True
+    conn = get_conn()
+    cur = conn.execute("DELETE FROM history_records WHERE id=?", (record_id,))
+    conn.commit()
+    if cur.rowcount > 0:
+        logger.info(f"历史记录已删除: {record_id}")
+        return True
+    return False
 
 
 def get_stats() -> HistoryStats:
     """获取历史数据统计。"""
-    hdir = _history_dir()
-    files = list(hdir.glob("*.json"))
+    conn = get_conn()
 
+    total = conn.execute("SELECT COUNT(*) FROM history_records").fetchone()[0]
+
+    # 按类型统计
     by_type: dict[str, int] = {}
-    total_pages = 0
-    total_entries = 0
-    recent_7 = 0
-    cutoff = datetime.now().timestamp() - 7 * 24 * 3600
+    for row in conn.execute("SELECT doc_type, COUNT(*) as cnt FROM history_records GROUP BY doc_type"):
+        by_type[row["doc_type"]] = row["cnt"]
 
-    for f in files:
-        try:
-            data = json.loads(f.read_text("utf-8"))
-            dt = data.get("doc_type", "unknown")
-            by_type[dt] = by_type.get(dt, 0) + 1
-            total_pages += data.get("pages", 0)
-            total_entries += data.get("record_count", 0)
-            # 检查是否在近7天
-            ts_str = data.get("timestamp", "")
-            if ts_str:
-                try:
-                    ts = datetime.fromisoformat(ts_str)
-                    if ts.timestamp() > cutoff:
-                        recent_7 += 1
-                except ValueError:
-                    pass
-        except (json.JSONDecodeError, OSError):
-            pass
+    agg = conn.execute(
+        "SELECT COALESCE(SUM(pages),0) as tp, COALESCE(SUM(record_count),0) as te FROM history_records"
+    ).fetchone()
+    total_pages = agg["tp"]
+    total_entries = agg["te"]
+
+    # 近 7 天
+    cutoff = datetime.now().timestamp() - 7 * 24 * 3600
+    cutoff_iso = datetime.fromtimestamp(cutoff).isoformat()
+    recent_7 = conn.execute(
+        "SELECT COUNT(*) FROM history_records WHERE timestamp>=?", (cutoff_iso,)
+    ).fetchone()[0]
 
     return HistoryStats(
-        total_records=len(files),
+        total_records=total,
         by_doc_type=by_type,
         total_pages_processed=total_pages,
         total_entries_extracted=total_entries,
