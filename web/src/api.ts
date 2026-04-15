@@ -69,6 +69,39 @@ export function extractErrorMessage(err: unknown): string {
   return "未知错误";
 }
 
+export interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+  pricing_url: string;
+  description: string;
+}
+
+export interface UserSettings {
+  openai_api_key_masked: string;
+  openai_api_key_set: boolean;
+  openai_model: string;
+  openai_base_url: string;
+  language: string;
+}
+
+export interface SettingsResponse {
+  settings: UserSettings;
+  available_models: ModelInfo[];
+}
+
+export async function getSettings(): Promise<SettingsResponse> {
+  const { data } = await api.get<SettingsResponse>("/api/settings");
+  return data;
+}
+
+export async function updateSettings(
+  body: Record<string, string>
+): Promise<{ message: string; settings: UserSettings }> {
+  const { data } = await api.put("/api/settings", body);
+  return data;
+}
+
 /** 文档类型中文映射 */
 export const DOC_TYPE_LABELS: Record<string, string> = {
   auto: "自动识别",

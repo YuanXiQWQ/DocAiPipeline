@@ -100,7 +100,10 @@ class VLMExtractor:
             logger.warning("OpenAI API key not set — VLM extraction will fail.")
             self.client = None
         else:
-            self.client = OpenAI(api_key=self.api_key)
+            self.client = OpenAI(
+                api_key=self.api_key,
+                **({"base_url": settings.openai_base_url} if settings.openai_base_url else {}),
+            )
 
     def extract(self, image: np.ndarray) -> List[CustomsField]:
         """从单份单据裁切图像中抽取字段。"""

@@ -110,7 +110,10 @@ class LogExtractor:
             logger.warning("OpenAI API key not set — LogExtractor will fail.")
             self.client = None
         else:
-            self.client = OpenAI(api_key=self.api_key)
+            self.client = OpenAI(
+                api_key=self.api_key,
+                **({"base_url": settings.openai_base_url} if settings.openai_base_url else {}),
+            )
 
     # ------------------------------------------------------------------
     # 主入口

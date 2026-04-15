@@ -170,7 +170,10 @@ def _classify_document(image: np.ndarray) -> ClassifyResponse:
     from openai import OpenAI
     from openai.types.chat import ChatCompletionMessageParam
 
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(
+        api_key=settings.openai_api_key,
+        **({"base_url": settings.openai_base_url} if settings.openai_base_url else {}),
+    )
     _, buf = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 85])
     b64 = base64.b64encode(buf.tobytes()).decode("utf-8")
 

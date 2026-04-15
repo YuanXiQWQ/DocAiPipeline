@@ -11,7 +11,9 @@ import {
   Package,
   Scissors,
   ClipboardList,
+  Settings,
 } from "lucide-react";
+import SettingsPanel from "./SettingsPanel";
 import {
   classifyDocument,
   processDocument,
@@ -49,6 +51,7 @@ export default function App() {
   const [backendOk, setBackendOk] = useState<boolean | null>(null);
   const [dragging, setDragging] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     healthCheck()
@@ -155,6 +158,13 @@ export default function App() {
                 title={backendOk ? "后端已连接" : "后端未连接"}
               />
             )}
+            <button
+              onClick={() => setShowSettings(true)}
+              className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
+              title="设置"
+            >
+              <Settings className="w-5 h-5 text-slate-500" />
+            </button>
           </div>
         </div>
       </header>
@@ -526,6 +536,9 @@ export default function App() {
       <footer className="text-center text-sm text-slate-400 py-6 mt-auto">
         Terra Drvo d.o.o. — DocAI Pipeline &copy; {new Date().getFullYear()}
       </footer>
+
+      {/* 设置面板 */}
+      <SettingsPanel open={showSettings} onClose={() => setShowSettings(false)} />
     </div>
   );
 }

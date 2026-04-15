@@ -23,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from loguru import logger
 
-from app.config import settings
+from app.config import AVAILABLE_MODELS, settings
 from app.pipeline import Pipeline
 from app.routers import fill, process
 from app.schemas import HealthResponse, PipelineResult
@@ -80,6 +80,31 @@ app.include_router(fill.router)
 async def health_check():
     """健康检查。"""
     return HealthResponse()
+
+
+# ------------------------------------------------------------------
+# 用户设置
+# ------------------------------------------------------------------
+
+
+@app.get("/api/settings")
+async def get_settings():
+    """获取当前用户设置（API Key 脱敏）和可用模型列表。"""
+    return {
+        "settings": settings.get_user_settings(),
+        "available_models": AVAILABLE_MODELS,
+    }
+
+
+@app.put("/api/settings")
+async def update_settings(body: dict):
+    """更新用户设置。
+
+    可更新字段：openai_api_key, openai_model, openai_base_url, language
+    """
+    settings.save_user_settings(body)
+    logger.info(f"用户设置已更新: {list(body.keys())}")
+    return {"message": "设置已保存", "settings": settings.get_user_settings()}
 
 
 # ------------------------------------------------------------------
