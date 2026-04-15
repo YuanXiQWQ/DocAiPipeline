@@ -22,12 +22,17 @@ import cv2
 import fitz
 import numpy as np
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
 
 from app.config import settings
 from app.extraction import FactoryExtractor, LogExtractor
 from app.pipeline import Pipeline
+from app.preprocessing import Preprocessor
+
+# 共享的预处理器实例
+_preprocessor = Preprocessor(dpi=300)
 
 router = APIRouter(prefix="/api", tags=["处理"])
 
@@ -113,32 +118,55 @@ def _save_upload(file: UploadFile) -> Path:
     return save_path
 
 
-def _file_to_images(file_path: Path, dpi: int = 300) -> list[np.ndarray]:
-    """将 PDF 或图片文件转为 BGR numpy 数组列表。"""
+def _save_crop(image: np.ndarray, filename: str, page: int) -> str:
+    """保存页面截图到 output/crops/，返回相对文件名。"""
+    stem = Path(filename).stem
+    crop_filename = f"{stem}_p{page}.jpg"
+    crop_dir = Path(settings.output_dir) / "crops"
+    crop_dir.mkdir(parents=True, exist_ok=True)
+    crop_path = crop_dir / crop_filename
+    cv2.imwrite(str(crop_path), image, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    return crop_filename
+
+
+def _file_to_images(file_path: Path, dpi: int = 300, preprocess: bool = True) -> list[np.ndarray]:
+    """将 PDF 或图片文件转为 BGR numpy 数组列表。
+
+    当 preprocess=True 时，对每张图像执行预处理管线
+    （去噪 → 纠偏 → 对比度增强 → 锐化），与提案中的预处理阶段对齐。
+    """
     suffix = file_path.suffix.lower()
+    raw_images: list[np.ndarray] = []
 
     # 图片文件直接读取
     if suffix in (".jpg", ".jpeg", ".png", ".tiff", ".tif", ".bmp", ".webp"):
         img = cv2.imread(str(file_path))
         if img is None:
             return []
-        return [img]
+        raw_images = [img]
+    else:
+        # PDF 逐页渲染
+        doc = fitz.open(str(file_path))
+        zoom = dpi / 72.0
+        mat = fitz.Matrix(zoom, zoom)
+        for page in doc:
+            pix = page.get_pixmap(matrix=mat)
+            img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, pix.n)
+            if pix.n == 4:
+                img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
+            elif pix.n == 3:
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            raw_images.append(img)
+        doc.close()
 
-    # PDF 逐页渲染
-    doc = fitz.open(str(file_path))
-    images = []
-    zoom = dpi / 72.0
-    mat = fitz.Matrix(zoom, zoom)
-    for page in doc:
-        pix = page.get_pixmap(matrix=mat)
-        img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, pix.n)
-        if pix.n == 4:
-            img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
-        elif pix.n == 3:
-            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-        images.append(img)
-    doc.close()
-    return images
+    # 预处理（去噪、纠偏、对比度增强、锐化）
+    if preprocess and raw_images:
+        processed = []
+        for img in raw_images:
+            processed.append(_preprocessor.preprocess(img))
+        return processed
+
+    return raw_images
 
 
 # ------------------------------------------------------------------
@@ -261,15 +289,21 @@ async def process_document(
             # Phase 2: 检尺单
             extractor = _get_log_extractor()
             for i, img in enumerate(images):
+                crop_path = _save_crop(img, filename, i + 1)
                 r = extractor.extract_page(img, filename=filename, page=i + 1)
-                results.append(r.model_dump())
+                data = r.model_dump()
+                data["crop_image_path"] = crop_path
+                results.append(data)
 
         elif actual_type in ("log_output", "soak_pool", "slicing", "packing"):
             # Phase 3: 工厂内部单据
             extractor = _get_factory_extractor()
             for i, img in enumerate(images):
+                crop_path = _save_crop(img, filename, i + 1)
                 r = extractor.extract(img, doc_type=actual_type, filename=filename, page=i + 1)
-                results.append(r.model_dump())
+                data = r.model_dump()
+                data["crop_image_path"] = crop_path
+                results.append(data)
 
         else:
             raise HTTPException(400, f"不支持的文档类型: {actual_type}")
@@ -287,3 +321,12 @@ async def process_document(
         results=results,
         warnings=warnings,
     )
+
+
+@router.get("/crop/{filename}")
+async def get_crop_image(filename: str):
+    """获取裁切/页面截图（供复核界面展示原始文档图像）。"""
+    crop_path = Path(settings.output_dir) / "crops" / filename
+    if not crop_path.exists():
+        raise HTTPException(404, f"裁切图片未找到: {filename}")
+    return FileResponse(str(crop_path), media_type="image/jpeg")

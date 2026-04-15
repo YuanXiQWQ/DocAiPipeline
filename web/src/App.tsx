@@ -439,18 +439,28 @@ export default function App() {
               </div>
             )}
 
-            {/* 数据预览 — 表格视图 */}
+            {/* 数据预览 — 文档图像 + 表格视图 */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
               <h3 className="font-medium text-slate-700 mb-3">数据预览</h3>
-              <div className="max-h-[32rem] overflow-auto">
+              <div className="max-h-[48rem] overflow-auto">
                 {result.results.map((rec, ri) => {
                   const entries = (rec.entries ?? rec.fields ?? []) as Record<string, unknown>[];
+                  const cropFile = rec.crop_image_path as string | undefined;
+                  const cropUrl = cropFile
+                    ? `/api/crop/${encodeURIComponent(typeof cropFile === "string" && cropFile.includes("/") ? cropFile.split("/").pop()! : cropFile)}`
+                    : null;
+
                   if (!Array.isArray(entries) || entries.length === 0) {
                     return (
                       <details key={ri} className="mb-3">
                         <summary className="text-sm font-medium text-slate-600 cursor-pointer">
                           记录 {ri + 1}
                         </summary>
+                        {cropUrl && (
+                          <div className="mt-2 mb-2 border border-slate-200 rounded-lg overflow-hidden max-h-64">
+                            <img src={cropUrl} alt={`原始文档 ${ri + 1}`} className="w-full object-contain max-h-64" />
+                          </div>
+                        )}
                         <pre className="text-xs bg-slate-50 rounded-lg p-3 mt-1 whitespace-pre-wrap">
                           {JSON.stringify(rec, null, 2).slice(0, 2000)}
                         </pre>
@@ -465,6 +475,22 @@ export default function App() {
                       <summary className="text-sm font-medium text-slate-600 cursor-pointer">
                         记录 {ri + 1} — {entries.length} 行
                       </summary>
+                      {/* 原始文档图像 */}
+                      {cropUrl && (
+                        <div className="mt-2 mb-3 border border-slate-200 rounded-lg overflow-hidden">
+                          <p className="text-xs text-slate-500 bg-slate-50 px-3 py-1 border-b border-slate-200">
+                            原始文档图像（点击可放大）
+                          </p>
+                          <a href={cropUrl} target="_blank" rel="noopener noreferrer">
+                            <img
+                              src={cropUrl}
+                              alt={`原始文档 ${ri + 1}`}
+                              className="w-full object-contain max-h-72 cursor-zoom-in"
+                            />
+                          </a>
+                        </div>
+                      )}
+                      {/* 结构化数据表格 */}
                       <div className="overflow-x-auto mt-2">
                         <table className="min-w-full text-xs border-collapse">
                           <thead>

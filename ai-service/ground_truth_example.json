@@ -1,0 +1,28 @@
+[
+  {
+    "filename": "CR_42072_3604_003141.pdf",
+    "page": 1,
+    "doc_type": "customs",
+    "fields": {
+      "document_type": "customs declaration",
+      "declaration_number": "JCI00158457",
+      "date": "2026-02-18",
+      "importer": "TERRA DRVO d.o.o., Ljukovo bb, 22321 Ljukovo",
+      "exporter": "HRVATSKE ŠUME d.o.o.",
+      "currency": "EUR",
+      "total_value": "12345.67",
+      "tariff_code": "44039100"
+    }
+  },
+  {
+    "filename": "检尺单_260206-3.pdf",
+    "page": 1,
+    "doc_type": "log_measurement",
+    "fields": {
+      "batch_id": "260206-3",
+      "species": "欧橡",
+      "total_count": "150",
+      "total_volume_m3": "45.23"
+    }
+  }
+]

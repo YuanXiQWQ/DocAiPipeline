@@ -79,11 +79,19 @@ CRITICAL rules for HANDWRITTEN text (especially on CMR documents):
 5. Specification numbers: read digits very carefully — "16959" vs "16979" matters.
 6. If handwritten text is ambiguous, prefer the reading that is consistent with other information on the same page or other pages.
 
+NOISE SUPPRESSION rules (scanned documents often contain visual artifacts):
+7. DRY PEN STROKES: Repeated pen strokes in blank areas (to get ink flowing) should be IGNORED — they are NOT characters. Do NOT read them as "11111", "/////", "———", or "一一一".
+8. INK BLEED / SPOT NOISE: Small dots, specks, or short lines from ink bleed or scanner dirt are NOT punctuation. Do NOT read them as ".", "'", ";", or "|".
+9. SUSPICIOUS DECIMAL POINTS: If a dot appears between digits in an amount/quantity field AND the resulting number seems unreasonable (e.g. "2.05" where "205" is expected), prefer the reading WITHOUT the decimal. Cross-reference with totals on the same page.
+10. SCAN LINE ARTIFACTS: Long vertical or horizontal lines at page edges are scanner artifacts — ignore them entirely.
+11. CORRECTIONS / STRIKETHROUGHS: If text has been crossed out and rewritten, read the CORRECTED (new) value. A crossed-out "0" may look like "8" — use context to determine the intended digit.
+12. STAINS / SHADOWS: Dark patches or shadows are NOT text. Only extract text that has clear character shapes.
+
 OTHER rules:
-7. SCAN the ENTIRE page including headers, footers, stamps, and fine print. Key fields like "Valuta fakture" or "Datum izdavanja" may be in small text.
-8. European decimal convention: comma = decimal separator, dot = thousands separator (e.g. 103.700,00 = one hundred three thousand seven hundred).
-9. If uncertain about a value, append [?].
-10. Extract as much as possible — partial values are better than empty strings.
+13. SCAN the ENTIRE page including headers, footers, stamps, and fine print. Key fields like "Valuta fakture" or "Datum izdavanja" may be in small text.
+14. European decimal convention: comma = decimal separator, dot = thousands separator (e.g. 103.700,00 = one hundred three thousand seven hundred).
+15. If uncertain about a value, append [?].
+16. Extract as much as possible — partial values are better than empty strings.
 
 Return ONLY a valid JSON object with the field names above as keys.
 No other text, no markdown fences, no code blocks.

@@ -68,6 +68,13 @@ CRITICAL RULES for handwritten numbers:
 5. If a value is ambiguous, append [?] to it.
 6. European decimal format: comma is decimal separator (e.g., "0,48" = 0.48 m³).
 
+NOISE SUPPRESSION rules:
+7. DRY PEN STROKES in blank areas (to get ink flowing) are NOT characters — ignore "11111", "/////" artifacts.
+8. Ink spots, scanner dirt, or short stray lines are NOT punctuation or digits — ignore them.
+9. Suspicious dots between digits: if "2.05" appears but "205" makes more sense in context (e.g. diameter 205mm → 20cm), prefer the value without the dot.
+10. Scanner line artifacts at page edges: ignore long vertical/horizontal lines.
+11. Crossed-out values: read the CORRECTED (rewritten) value, not the original.
+
 Return a JSON object with this exact structure:
 {
   "sheet_type": "handwritten" | "printed_tally" | "confirmation" | "id_list_only",

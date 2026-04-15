@@ -78,6 +78,9 @@ These are raw CM measurements, NOT the same as the 2-digit "径级" used elsewhe
 Read handwritten digits carefully: distinguish 0/6, 1/7, 3/5, 4/9.
 If uncertain, append [?].
 
+NOISE SUPPRESSION: Ignore dry pen strokes, ink spots, scanner line artifacts, and stains.
+Crossed-out values should be replaced with the corrected rewritten value.
+
 Return ONLY valid JSON. No markdown, no extra text.
 """
 
@@ -120,6 +123,9 @@ Return JSON:
   ]
 }
 
+NOISE SUPPRESSION: Ignore dry pen strokes, ink spots, scanner line artifacts, and stains.
+Crossed-out values should be replaced with the corrected rewritten value.
+
 Return ONLY valid JSON. No markdown, no extra text.
 """
 
@@ -155,6 +161,10 @@ Return JSON:
     {"row": 1, "log_spec": "2.5×2.60", "thickness_mm": 370, "width_mm": 340, "slice_thickness": 2.0, "core_thickness_mm": 60, "core_count": 1}
   ]
 }
+
+NOISE SUPPRESSION: Ignore dry pen strokes, ink spots, scanner line artifacts, and stains.
+Crossed-out values should be replaced with the corrected rewritten value.
+This table may be rotated — artifacts along the original page edges are scanner noise.
 
 Return ONLY valid JSON. No markdown, no extra text.
 """
@@ -207,6 +217,9 @@ IMPORTANT: Some rows are continuation rows with only length and piece_count fill
 For these rows, set owner/package_id/grade/craft to "" (empty string).
 The caller will carry forward from the previous non-empty row.
 If uncertain about a value, append [?].
+
+NOISE SUPPRESSION: Ignore dry pen strokes, ink spots, scanner line artifacts, and stains.
+Crossed-out values should be replaced with the corrected rewritten value.
 
 Return ONLY valid JSON. No markdown, no extra text.
 """
