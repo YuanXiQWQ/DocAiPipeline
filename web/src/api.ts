@@ -365,6 +365,34 @@ export async function checkUpdate(): Promise<VersionInfo> {
     return data;
 }
 
+/* 扫描仪 */
+export interface ScannerDevice {
+    device_id: string;
+    name: string;
+}
+
+export interface ScanDevicesResponse {
+    available: boolean;
+    devices: ScannerDevice[];
+}
+
+export interface ScanResultResponse {
+    filename: string;
+    path: string;
+}
+
+export async function getScanDevices(): Promise<ScanDevicesResponse> {
+    const {data} = await api.get<ScanDevicesResponse>("/api/scan/devices");
+    return data;
+}
+
+export async function scanAcquire(deviceId?: string): Promise<ScanResultResponse> {
+    const params: Record<string, string> = {};
+    if (deviceId) params.device_id = deviceId;
+    const {data} = await api.post<ScanResultResponse>("/api/scan/acquire", null, {params});
+    return data;
+}
+
 /* 批量处理 SSE 事件类型 */
 export interface BatchProgressEvent {
     index: number;

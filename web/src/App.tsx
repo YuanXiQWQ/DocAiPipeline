@@ -35,10 +35,13 @@ import {
     extractErrorMessage,
     fillExcel,
     type FillResult,
+    getScanDevices,
     getSettings,
     healthCheck,
     processBatch,
     type ProcessResult,
+    scanAcquire,
+    type ScannerDevice,
 } from "./api";
 
 /* 文档类型图标映射 */
@@ -92,6 +95,13 @@ export default function App() {
     const [needsSetup, setNeedsSetup] = useState(false);
     const batchAbortRef = useRef<{ abort: () => void } | null>(null);
 
+    /* 扫描仪状态 */
+    const [scanAvailable, setScanAvailable] = useState(false);
+    const [scanDevices, setScanDevices] = useState<ScannerDevice[]>([]);
+    const [scanSelectedDevice, setScanSelectedDevice] = useState("");
+    const [scanning, setScanning] = useState(false);
+    const [scanMsg, setScanMsg] = useState("");
+
     /* 派生状态 */
     const isProcessing = files.some(f => f.status === "processing");
     const selectedFile = selectedFileIndex >= 0 ? files[selectedFileIndex] : null;
@@ -110,6 +120,14 @@ export default function App() {
                 }
             })
             .catch(() => setBackendOk(false));
+        // 检测扫描仪可用性
+        getScanDevices()
+            .then((res) => {
+                setScanAvailable(res.available);
+                setScanDevices(res.devices);
+                if (res.devices.length > 0) setScanSelectedDevice(res.devices[0].device_id);
+            })
+            .catch(() => setScanAvailable(false));
     }, []);
 
     const addFiles = useCallback((newFiles: FileList | File[]) => {
@@ -141,6 +159,25 @@ export default function App() {
         setDragging(false);
         if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
     }, [addFiles]);
+
+    const handleScan = useCallback(async () => {
+        setScanning(true);
+        setScanMsg("");
+        try {
+            const res = await scanAcquire(scanSelectedDevice || undefined);
+            // 将扫描得到的文件加入列表（从后端下载）
+            const resp = await fetch(`/api/scan/file/${res.filename}`);
+            const blob = await resp.blob();
+            const file = new File([blob], res.filename, {type: blob.type || "image/png"});
+            addFiles([file]);
+            setScanMsg(t("upload.scan_success"));
+        } catch (err) {
+            setScanMsg(t("upload.scan_error") + ": " + extractErrorMessage(err));
+        } finally {
+            setScanning(false);
+            setTimeout(() => setScanMsg(""), 5000);
+        }
+    }, [scanSelectedDevice, addFiles, t]);
 
     /* 开始处理：只处理 waiting 状态的文件，不影响已完成的 */
     const handleProcess = useCallback(() => {
@@ -558,28 +595,72 @@ function ProcessingFlow({
                         </div>
                     </div>
 
-                    {/* 文件上传区 */}
-                    <div
-                        className={`bg-white rounded-2xl shadow-sm border-2 border-dashed transition-colors p-12 text-center cursor-pointer ${
-                            dragging ? "border-blue-500 bg-blue-50" : "border-slate-300 hover:border-blue-400"
-                        }`}
-                        onClick={() => inputRef.current?.click()}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDragEnter={() => setDragging(true)}
-                        onDragLeave={() => setDragging(false)}
-                        onDrop={handleDrop}
-                    >
-                        <input
-                            ref={inputRef}
-                            type="file"
-                            accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif"
-                            multiple
-                            className="hidden"
-                            onChange={handleFileSelect}
-                        />
-                        <Upload className={`w-12 h-12 mx-auto mb-4 ${dragging ? "text-blue-500" : "text-slate-400"}`}/>
-                        <p className="text-slate-600 font-medium">{t("upload.hint")}</p>
-                        <p className="text-sm text-slate-400 mt-2">{t("upload.supported")}</p>
+                    {/* 文件上传区 + 扫描仪面板 */}
+                    <div className={`grid gap-4 ${scanAvailable ? "grid-cols-3" : "grid-cols-1"}`}>
+                        {/* 拖放上传区 */}
+                        <div
+                            className={`${scanAvailable ? "col-span-2" : ""} bg-white rounded-2xl shadow-sm border-2 border-dashed transition-colors p-12 text-center cursor-pointer ${
+                                dragging ? "border-blue-500 bg-blue-50" : "border-slate-300 hover:border-blue-400"
+                            }`}
+                            onClick={() => inputRef.current?.click()}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDragEnter={() => setDragging(true)}
+                            onDragLeave={() => setDragging(false)}
+                            onDrop={handleDrop}
+                        >
+                            <input
+                                ref={inputRef}
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif"
+                                multiple
+                                className="hidden"
+                                onChange={handleFileSelect}
+                            />
+                            <Upload className={`w-12 h-12 mx-auto mb-4 ${dragging ? "text-blue-500" : "text-slate-400"}`}/>
+                            <p className="text-slate-600 font-medium">{t("upload.hint")}</p>
+                            <p className="text-sm text-slate-400 mt-2">{t("upload.supported")}</p>
+                        </div>
+
+                        {/* 扫描仪面板（仅在检测到可用时显示） */}
+                        {scanAvailable && (
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col items-center justify-center text-center space-y-4">
+                            <ScanLine className="w-10 h-10 text-violet-500"/>
+                            <p className="text-sm font-medium text-slate-700">{t("upload.scan")}</p>
+                            {scanDevices.length > 1 && (
+                                <select
+                                    value={scanSelectedDevice}
+                                    onChange={(e) => setScanSelectedDevice(e.target.value)}
+                                    className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                                >
+                                    {scanDevices.map((d) => (
+                                        <option key={d.device_id} value={d.device_id}>{d.name}</option>
+                                    ))}
+                                </select>
+                            )}
+                            {scanDevices.length === 1 && (
+                                <p className="text-xs text-slate-400 truncate w-full">{scanDevices[0].name}</p>
+                            )}
+                            {scanDevices.length === 0 && (
+                                <p className="text-xs text-amber-500">{t("upload.scan_no_device")}</p>
+                            )}
+                            <button
+                                onClick={handleScan}
+                                disabled={scanning || scanDevices.length === 0}
+                                className="w-full px-4 py-2.5 bg-violet-600 text-white rounded-xl hover:bg-violet-700 transition-colors text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                            >
+                                {scanning ? (
+                                    <><Loader2 className="w-4 h-4 animate-spin"/>{t("upload.scan_scanning")}</>
+                                ) : (
+                                    <><ScanLine className="w-4 h-4"/>{t("upload.scan")}</>
+                                )}
+                            </button>
+                            {scanMsg && (
+                                <p className={`text-xs ${scanMsg.includes(t("upload.scan_error")) ? "text-red-500" : "text-emerald-600"}`}>
+                                    {scanMsg}
+                                </p>
+                            )}
+                        </div>
+                        )}
                     </div>
 
                     {/* 文件列表 */}

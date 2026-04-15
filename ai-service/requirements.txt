@@ -35,5 +35,8 @@ httpx>=0.27
 pystray>=0.19
 Pillow>=10.4
 
+# 扫描仪 WIA COM 接口（仅 Windows 桌面模式）
+comtypes>=1.4; sys_platform == "win32"
+
 # 原生窗口（可选，仅 Python ≤3.12；pythonnet 尚不支持 3.13+）
 # pywebview>=5.0

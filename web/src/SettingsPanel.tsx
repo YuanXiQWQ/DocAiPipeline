@@ -323,7 +323,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                             <div className="text-sm text-slate-500">
                                 <span>{t("settings.update_current")}: </span>
                                 <span className="font-mono font-medium text-slate-700">
-                                    {versionInfo?.current ?? appVersion || "..."}
+                                    {versionInfo?.current ?? (appVersion || "...")}
                                 </span>
                             </div>
                             {/* 检查更新（桌面专属） */}
