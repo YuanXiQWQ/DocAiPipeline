@@ -1,16 +1,19 @@
 """数据汇总路由：从历史记录与明细存储中聚合各环节数据，生成进销存概览。
 
-支持日期范围过滤、卡片明细下钻、行级编辑与历史追溯。
+支持日期范围过滤、卡片明细下钻、行级编辑与历史追溯、单位换算与实时汇率。
 """
 
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query
+from loguru import logger
 from pydantic import BaseModel
 
 from app.config import settings
@@ -363,3 +366,60 @@ async def get_entry_api(entry_id: str):
     if not entry:
         raise HTTPException(404, "明细行不存在")
     return entry
+
+
+# ------------------------------------------------------------------
+# 实时汇率（缓存 30 分钟）
+# ------------------------------------------------------------------
+
+_rate_cache: dict[str, Any] = {}
+_rate_cache_ts: float = 0
+_RATE_TTL = 1800  # 30 分钟
+
+
+async def _fetch_rates(base: str = "EUR") -> dict[str, float]:
+    """从公开 API 获取实时汇率，带缓存。"""
+    global _rate_cache, _rate_cache_ts
+    cache_key = base.lower()
+    if cache_key in _rate_cache and time.time() - _rate_cache_ts < _RATE_TTL:
+        return _rate_cache[cache_key]
+
+    urls = [
+        f"https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/{base.lower()}.json",
+        f"https://latest.currency-api.pages.dev/v1/currencies/{base.lower()}.json",
+    ]
+    for url in urls:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    rates = data.get(base.lower(), {})
+                    if rates:
+                        _rate_cache[cache_key] = rates
+                        _rate_cache_ts = time.time()
+                        return rates
+        except Exception as e:
+            logger.debug(f"汇率获取失败 ({url}): {e}")
+            continue
+
+    return {}
+
+
+class ExchangeRateResponse(BaseModel):
+    """汇率响应。"""
+    base: str
+    rates: dict[str, float]
+    cached: bool = False
+
+
+@router.get("/exchange-rates", response_model=ExchangeRateResponse)
+async def get_exchange_rates(base: str = Query("EUR", description="基准货币")):
+    """获取实时汇率（缓存 30 分钟）。"""
+    cache_key = base.lower()
+    cached = cache_key in _rate_cache and time.time() - _rate_cache_ts < _RATE_TTL
+    rates = await _fetch_rates(base.upper())
+    if not rates:
+        # 返回硬编码后备汇率
+        rates = {"eur": 1, "usd": 1.08, "cny": 7.85, "rsd": 117.2}
+    return ExchangeRateResponse(base=base.upper(), rates=rates, cached=cached)

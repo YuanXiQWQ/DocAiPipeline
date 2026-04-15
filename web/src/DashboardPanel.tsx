@@ -15,8 +15,8 @@ import {
     Minus,
     RotateCcw,
     Clock,
-    Filter,
     X,
+    RefreshCw,
 } from "lucide-react";
 import {
     getSummary,
@@ -25,6 +25,7 @@ import {
     updateSummaryEntry,
     deleteSummaryEntry,
     restoreSummaryEntry,
+    getExchangeRates,
     extractErrorMessage,
     type OverallSummary,
     type SummaryEntry,
@@ -40,6 +41,66 @@ function thisYearRange(): [string, string] {
 /* 数值格式化 */
 function fmtNum(v: number): string {
     return v.toLocaleString("zh-CN", {maximumFractionDigits: 2});
+}
+
+/* ============================================================== */
+/* 单位换算系统                                                   */
+/* ============================================================== */
+
+type LengthUnit = "mm" | "cm" | "m" | "in" | "ft";
+type AreaUnit = "mm²" | "cm²" | "m²" | "in²" | "ft²";
+type VolumeUnit = "mm³" | "cm³" | "m³" | "in³" | "ft³";
+type CurrencyUnit = "EUR" | "USD" | "CNY" | "RSD";
+
+interface UnitConfig {
+    length: LengthUnit;
+    area: AreaUnit;
+    volume: VolumeUnit;
+    currency: CurrencyUnit;
+}
+
+const LENGTH_TO_M: Record<LengthUnit, number> = { mm: 0.001, cm: 0.01, m: 1, in: 0.0254, ft: 0.3048 };
+const AREA_TO_M2: Record<AreaUnit, number> = { "mm²": 1e-6, "cm²": 1e-4, "m²": 1, "in²": 0.00064516, "ft²": 0.092903 };
+const VOL_TO_M3: Record<VolumeUnit, number> = { "mm³": 1e-9, "cm³": 1e-6, "m³": 1, "in³": 1.6387e-5, "ft³": 0.0283168 };
+
+const LENGTH_UNITS: LengthUnit[] = ["mm", "cm", "m", "in", "ft"];
+const AREA_UNITS: AreaUnit[] = ["mm²", "cm²", "m²", "in²", "ft²"];
+const VOLUME_UNITS: VolumeUnit[] = ["mm³", "cm³", "m³", "in³", "ft³"];
+const CURRENCY_UNITS: CurrencyUnit[] = ["EUR", "USD", "CNY", "RSD"];
+
+const DEFAULT_UNITS: UnitConfig = { length: "m", area: "m²", volume: "m³", currency: "EUR" };
+
+/** 单位换算：将原始值从原始单位转换到目标单位（仅视觉展示） */
+function convertUnit(value: number, fromUnit: string, units: UnitConfig, rates: Record<string, number>): { value: number; unit: string } {
+    const fu = fromUnit.toLowerCase().trim();
+    // 货币
+    if (fu === "eur" || fu === "usd" || fu === "cny" || fu === "rsd") {
+        if (units.currency === fromUnit.toUpperCase()) return {value, unit: units.currency};
+        const fromKey = fu;
+        const toKey = units.currency.toLowerCase();
+        const fromToEur = fromKey === "eur" ? 1 : (1 / (rates[fromKey] || 1));
+        const eurToTarget = toKey === "eur" ? 1 : (rates[toKey] || 1);
+        return {value: value * fromToEur * eurToTarget, unit: units.currency};
+    }
+    // 体积
+    if (fu === "m³" || fu === "cm³" || fu === "mm³" || fu === "in³" || fu === "ft³") {
+        const fromFactor = VOL_TO_M3[fu as VolumeUnit] ?? 1;
+        const toFactor = VOL_TO_M3[units.volume] ?? 1;
+        return {value: value * fromFactor / toFactor, unit: units.volume};
+    }
+    // 面积
+    if (fu === "m²" || fu === "cm²" || fu === "mm²" || fu === "in²" || fu === "ft²") {
+        const fromFactor = AREA_TO_M2[fu as AreaUnit] ?? 1;
+        const toFactor = AREA_TO_M2[units.area] ?? 1;
+        return {value: value * fromFactor / toFactor, unit: units.area};
+    }
+    // 长度
+    if (fu === "mm" || fu === "cm" || fu === "m" || fu === "in" || fu === "ft") {
+        const fromFactor = LENGTH_TO_M[fu as LengthUnit] ?? 1;
+        const toFactor = LENGTH_TO_M[units.length] ?? 1;
+        return {value: value * fromFactor / toFactor, unit: units.length};
+    }
+    return {value, unit: fromUnit};
 }
 
 /* 统计卡片 */
@@ -347,6 +408,118 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
 /* 主看板                                                         */
 /* ============================================================== */
 
+/* ============================================================== */
+/* 筛选面板（展开式）                                              */
+/* ============================================================== */
+
+function FilterPanel({
+    dateFrom, dateTo, setDateFrom, setDateTo,
+    units, setUnits,
+    rates, ratesLive, onRefreshRates,
+    onReset,
+}: {
+    dateFrom: string; dateTo: string;
+    setDateFrom: (v: string) => void; setDateTo: (v: string) => void;
+    units: UnitConfig; setUnits: (u: UnitConfig) => void;
+    rates: Record<string, number>; ratesLive: boolean; onRefreshRates: () => void;
+    onReset: () => void;
+}) {
+    const t = useT();
+    const [defFrom, defTo] = thisYearRange();
+    return (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+            {/* 第一行：日期范围 */}
+            <div className="flex flex-wrap items-end gap-4">
+                <div>
+                    <label className="block text-xs text-gray-500 mb-1">{t("dashboard.date_from")}</label>
+                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                           className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"/>
+                </div>
+                <div>
+                    <label className="block text-xs text-gray-500 mb-1">{t("dashboard.date_to")}</label>
+                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+                           className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"/>
+                </div>
+                <button onClick={() => { setDateFrom(defFrom); setDateTo(defTo); }}
+                        className="px-3 py-1.5 border border-gray-200 text-gray-500 text-sm rounded-lg hover:bg-gray-50 transition">
+                    {t("dashboard.reset_filter")}
+                </button>
+            </div>
+
+            {/* 分隔线 */}
+            <div className="border-t border-gray-100"/>
+
+            {/* 第二行：单位换算 */}
+            <div>
+                <p className="text-xs font-medium text-gray-500 mb-2.5">{t("dashboard.unit_conversion")}</p>
+                <div className="flex flex-wrap items-center gap-4">
+                    {/* 货币 */}
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-gray-400">{t("dashboard.currency")}</span>
+                        <select value={units.currency}
+                                onChange={e => setUnits({...units, currency: e.target.value as CurrencyUnit})}
+                                className="border border-gray-200 rounded-lg px-2 py-1 text-sm">
+                            {CURRENCY_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                        <button onClick={onRefreshRates} className="p-1 text-gray-400 hover:text-blue-500" title={ratesLive ? t("dashboard.rate_live") : t("dashboard.rate_fallback")}>
+                            <RefreshCw className={`w-3.5 h-3.5 ${ratesLive ? "text-emerald-500" : "text-gray-300"}`}/>
+                        </button>
+                        {ratesLive && units.currency !== "EUR" && rates[units.currency.toLowerCase()] && (
+                            <span className="text-xs text-gray-400">1 EUR = {rates[units.currency.toLowerCase()]?.toFixed(2)} {units.currency}</span>
+                        )}
+                    </div>
+
+                    <div className="h-4 border-l border-gray-200"/>
+
+                    {/* 长度 */}
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-gray-400">{t("dashboard.length")}</span>
+                        <select value={units.length}
+                                onChange={e => {
+                                    const l = e.target.value as LengthUnit;
+                                    const idx = LENGTH_UNITS.indexOf(l);
+                                    setUnits({...units, length: l, area: AREA_UNITS[idx], volume: VOLUME_UNITS[idx]});
+                                }}
+                                className="border border-gray-200 rounded-lg px-2 py-1 text-sm">
+                            {LENGTH_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                    </div>
+
+                    {/* 面积 */}
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-gray-400">{t("dashboard.area")}</span>
+                        <select value={units.area}
+                                onChange={e => setUnits({...units, area: e.target.value as AreaUnit})}
+                                className="border border-gray-200 rounded-lg px-2 py-1 text-sm">
+                            {AREA_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                    </div>
+
+                    {/* 体积 */}
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-gray-400">{t("dashboard.volume")}</span>
+                        <select value={units.volume}
+                                onChange={e => setUnits({...units, volume: e.target.value as VolumeUnit})}
+                                className="border border-gray-200 rounded-lg px-2 py-1 text-sm">
+                            {VOLUME_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                    </div>
+
+                    {/* 重置 */}
+                    <button onClick={onReset}
+                            className="px-2.5 py-1 text-xs border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 transition">
+                        {t("dashboard.reset_filter")}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* ============================================================== */
+/* 主看板                                                         */
+/* ============================================================== */
+
 export default function DashboardPanel() {
     const t = useT();
     const [data, setData] = useState<OverallSummary | null>(null);
@@ -356,6 +529,11 @@ export default function DashboardPanel() {
     const [defFrom, defTo] = thisYearRange();
     const [dateFrom, setDateFrom] = useState(defFrom);
     const [dateTo, setDateTo] = useState(defTo);
+
+    /* 单位换算 */
+    const [units, setUnits] = useState<UnitConfig>({...DEFAULT_UNITS});
+    const [rates, setRates] = useState<Record<string, number>>({});
+    const [ratesLive, setRatesLive] = useState(false);
 
     /* 明细视图状态 */
     const [detailView, setDetailView] = useState<{title: string; category: string; metric: string; unit: string} | null>(null);
@@ -369,10 +547,33 @@ export default function DashboardPanel() {
             .finally(() => setLoading(false));
     }, [dateFrom, dateTo]);
 
+    const fetchRates = useCallback(() => {
+        getExchangeRates("EUR")
+            .then(r => { setRates(r.rates); setRatesLive(true); })
+            .catch(() => setRatesLive(false));
+    }, []);
+
     useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => { fetchRates(); }, [fetchRates]);
+
+    /* 换算辅助函数 */
+    const cv = useCallback((value: number, fromUnit: string) => {
+        return convertUnit(value, fromUnit, units, rates);
+    }, [units, rates]);
+
+    const cvFmt = useCallback((value: number, fromUnit: string) => {
+        const r = cv(value, fromUnit);
+        return {text: fmtNum(r.value), unit: r.unit};
+    }, [cv]);
 
     const openDetail = (title: string, category: string, metric: string, unit: string) => {
         setDetailView({title, category, metric, unit});
+    };
+
+    const resetAll = () => {
+        setDateFrom(defFrom);
+        setDateTo(defTo);
+        setUnits({...DEFAULT_UNITS});
     };
 
     /* 明细视图 */
@@ -399,33 +600,19 @@ export default function DashboardPanel() {
     /* 主看板视图 */
     return (
         <div className="space-y-8">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <BarChart3 className="w-6 h-6 text-blue-600"/>
-                    <h2 className="text-xl font-semibold text-gray-900">{t("dashboard.title")}</h2>
-                </div>
+            <div className="flex items-center gap-3">
+                <BarChart3 className="w-6 h-6 text-blue-600"/>
+                <h2 className="text-xl font-semibold text-gray-900">{t("dashboard.title")}</h2>
             </div>
 
-            {/* 日期筛选器 */}
-            <div className="flex flex-wrap items-end gap-3 bg-white rounded-xl border border-gray-200 p-4">
-                <div>
-                    <label className="block text-xs text-gray-500 mb-1">{t("dashboard.date_from")}</label>
-                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                           className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"/>
-                </div>
-                <div>
-                    <label className="block text-xs text-gray-500 mb-1">{t("dashboard.date_to")}</label>
-                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                           className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"/>
-                </div>
-                <button onClick={fetchData} className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition">
-                    <Filter className="w-3.5 h-3.5"/> {t("dashboard.filter")}
-                </button>
-                <button onClick={() => { setDateFrom(defFrom); setDateTo(defTo); }}
-                        className="px-3 py-1.5 border border-gray-200 text-gray-500 text-sm rounded-lg hover:bg-gray-50 transition">
-                    {t("dashboard.reset_filter")}
-                </button>
-            </div>
+            {/* 展开式筛选面板 */}
+            <FilterPanel
+                dateFrom={dateFrom} dateTo={dateTo}
+                setDateFrom={setDateFrom} setDateTo={setDateTo}
+                units={units} setUnits={setUnits}
+                rates={rates} ratesLive={ratesLive} onRefreshRates={fetchRates}
+                onReset={resetAll}
+            />
 
             {loading ? (
                 <div className="flex items-center justify-center py-20">
@@ -441,9 +628,9 @@ export default function DashboardPanel() {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <StatCard icon={<BarChart3 className="w-5 h-5 text-blue-500"/>} label={t("dashboard.docs_processed")} value={data.total_documents_processed} unit={t("dashboard.unit_doc")} color="bg-blue-50 border-blue-200"/>
                             <StatCard icon={<BarChart3 className="w-5 h-5 text-indigo-500"/>} label={t("dashboard.pages_processed")} value={data.total_pages_processed} unit={t("dashboard.unit_page")} color="bg-indigo-50 border-indigo-200"/>
-                            <StatCard icon={<ArrowDownCircle className="w-5 h-5 text-emerald-500"/>} label={t("dashboard.log_inbound")} value={data.log_summary.total_inbound_m3} unit="m³" color="bg-emerald-50 border-emerald-200"
+                            <StatCard icon={<ArrowDownCircle className="w-5 h-5 text-emerald-500"/>} label={t("dashboard.log_inbound")} value={cv(data.log_summary.total_inbound_m3, "m³").value} unit={cv(data.log_summary.total_inbound_m3, "m³").unit} color="bg-emerald-50 border-emerald-200"
                                       onClick={() => openDetail(t("dashboard.inbound_volume"), "log_inbound", "inbound_batch", "m³")}/>
-                            <StatCard icon={<ArrowUpCircle className="w-5 h-5 text-amber-500"/>} label={t("dashboard.log_outbound")} value={data.log_summary.total_outbound_m3} unit="m³" color="bg-amber-50 border-amber-200"
+                            <StatCard icon={<ArrowUpCircle className="w-5 h-5 text-amber-500"/>} label={t("dashboard.log_outbound")} value={cv(data.log_summary.total_outbound_m3, "m³").value} unit={cv(data.log_summary.total_outbound_m3, "m³").unit} color="bg-amber-50 border-amber-200"
                                       onClick={() => openDetail(t("dashboard.outbound_volume"), "log_outbound", "outbound_batch", "m³")}/>
                         </div>
                     </div>
@@ -456,9 +643,9 @@ export default function DashboardPanel() {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.batches")} value={data.import_summary.total_batches} color="bg-sky-50 border-sky-200"/>
                             <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.invoices")} value={data.import_summary.total_invoices} color="bg-sky-50 border-sky-200"/>
-                            <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.total_amount")} value={data.import_summary.total_amount_eur} unit="EUR" color="bg-sky-50 border-sky-200"
+                            <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.total_amount")} value={cv(data.import_summary.total_amount_eur, "EUR").value} unit={cv(data.import_summary.total_amount_eur, "EUR").unit} color="bg-sky-50 border-sky-200"
                                       onClick={() => openDetail(t("dashboard.total_amount"), "import", "customs_record", "EUR")}/>
-                            <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.total_volume")} value={data.import_summary.total_volume_m3} unit="m³" color="bg-sky-50 border-sky-200"/>
+                            <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.total_volume")} value={cv(data.import_summary.total_volume_m3, "m³").value} unit={cv(data.import_summary.total_volume_m3, "m³").unit} color="bg-sky-50 border-sky-200"/>
                         </div>
                         {Object.keys(data.import_summary.suppliers).length > 0 && (
                             <div className="mt-3 flex flex-wrap gap-2">
@@ -477,17 +664,17 @@ export default function DashboardPanel() {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <StatCard icon={<ArrowDownCircle className="w-5 h-5 text-emerald-500"/>} label={t("dashboard.inbound_logs")} value={data.log_summary.total_inbound_logs} unit={t("dashboard.unit_log")} color="bg-emerald-50 border-emerald-200"
                                       onClick={() => openDetail(t("dashboard.inbound_logs"), "log_inbound", "inbound_batch", "m³")}/>
-                            <StatCard icon={<ArrowDownCircle className="w-5 h-5 text-emerald-500"/>} label={t("dashboard.inbound_volume")} value={data.log_summary.total_inbound_m3} unit="m³" color="bg-emerald-50 border-emerald-200"
+                            <StatCard icon={<ArrowDownCircle className="w-5 h-5 text-emerald-500"/>} label={t("dashboard.inbound_volume")} value={cv(data.log_summary.total_inbound_m3, "m³").value} unit={cv(data.log_summary.total_inbound_m3, "m³").unit} color="bg-emerald-50 border-emerald-200"
                                       onClick={() => openDetail(t("dashboard.inbound_volume"), "log_inbound", "inbound_batch", "m³")}/>
                             <StatCard icon={<ArrowUpCircle className="w-5 h-5 text-orange-500"/>} label={t("dashboard.outbound_logs")} value={data.log_summary.total_outbound_logs} unit={t("dashboard.unit_log")} color="bg-orange-50 border-orange-200"
                                       onClick={() => openDetail(t("dashboard.outbound_logs"), "log_outbound", "outbound_batch", "m³")}/>
-                            <StatCard icon={<ArrowUpCircle className="w-5 h-5 text-orange-500"/>} label={t("dashboard.outbound_volume")} value={data.log_summary.total_outbound_m3} unit="m³" color="bg-orange-50 border-orange-200"
+                            <StatCard icon={<ArrowUpCircle className="w-5 h-5 text-orange-500"/>} label={t("dashboard.outbound_volume")} value={cv(data.log_summary.total_outbound_m3, "m³").value} unit={cv(data.log_summary.total_outbound_m3, "m³").unit} color="bg-orange-50 border-orange-200"
                                       onClick={() => openDetail(t("dashboard.outbound_volume"), "log_outbound", "outbound_batch", "m³")}/>
                         </div>
                         {(data.log_summary.total_inbound_m3 > 0 || data.log_summary.total_outbound_m3 > 0) && (
                             <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm">
                                 <span className="text-gray-600">{t("dashboard.stock")}</span>
-                                <span className="font-bold text-gray-900 ml-1">{(data.log_summary.total_inbound_m3 - data.log_summary.total_outbound_m3).toFixed(2)} m³</span>
+                                <span className="font-bold text-gray-900 ml-1">{fmtNum(cv(data.log_summary.total_inbound_m3 - data.log_summary.total_outbound_m3, "m³").value)} {cv(0, "m³").unit}</span>
                                 <span className="text-gray-500 ml-2">({data.log_summary.total_inbound_logs - data.log_summary.total_outbound_logs} {t("dashboard.unit_log")})</span>
                             </div>
                         )}
@@ -501,17 +688,17 @@ export default function DashboardPanel() {
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                             <StatCard icon={<Package className="w-5 h-5 text-violet-500"/>} label={t("dashboard.soak_pool")}
                                       value={`${data.factory_summary.soak_pool_logs} ${t("dashboard.unit_log")}`}
-                                      unit={data.factory_summary.soak_pool_m3 > 0 ? `/ ${data.factory_summary.soak_pool_m3.toFixed(2)} m³` : undefined}
+                                      unit={data.factory_summary.soak_pool_m3 > 0 ? `/ ${fmtNum(cv(data.factory_summary.soak_pool_m3, "m³").value)} ${cv(0, "m³").unit}` : undefined}
                                       color="bg-violet-50 border-violet-200"
                                       onClick={() => openDetail(t("dashboard.soak_pool"), "soak_pool", "soak_pool_batch", "根")}/>
                             <StatCard icon={<Scissors className="w-5 h-5 text-rose-500"/>} label={t("dashboard.slicing")}
                                       value={`${data.factory_summary.slicing_logs} ${t("dashboard.unit_log")}`}
-                                      unit={data.factory_summary.slicing_output_m2 > 0 ? `/ ${data.factory_summary.slicing_output_m2.toFixed(2)} m²` : undefined}
+                                      unit={data.factory_summary.slicing_output_m2 > 0 ? `/ ${fmtNum(cv(data.factory_summary.slicing_output_m2, "m²").value)} ${cv(0, "m²").unit}` : undefined}
                                       color="bg-rose-50 border-rose-200"
                                       onClick={() => openDetail(t("dashboard.slicing"), "slicing", "slicing_batch", "根")}/>
                             <StatCard icon={<Package className="w-5 h-5 text-teal-500"/>} label={t("dashboard.packing")}
                                       value={`${data.factory_summary.packing_packages} ${t("dashboard.unit_pack")}`}
-                                      unit={`/ ${data.factory_summary.packing_pieces} ${t("dashboard.unit_piece")} / ${data.factory_summary.packing_area_m2.toFixed(2)} m²`}
+                                      unit={`/ ${data.factory_summary.packing_pieces} ${t("dashboard.unit_piece")} / ${fmtNum(cv(data.factory_summary.packing_area_m2, "m²").value)} ${cv(0, "m²").unit}`}
                                       color="bg-teal-50 border-teal-200"
                                       onClick={() => openDetail(t("dashboard.packing"), "packing", "packing_batch", "包")}/>
                         </div>

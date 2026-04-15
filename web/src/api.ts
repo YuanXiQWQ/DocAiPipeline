@@ -312,6 +312,21 @@ export async function getSummaryEntry(entryId: string): Promise<SummaryEntry> {
     return data;
 }
 
+// ------------------------------------------------------------------
+// 实时汇率
+// ------------------------------------------------------------------
+
+export interface ExchangeRateResponse {
+    base: string;
+    rates: Record<string, number>;
+    cached: boolean;
+}
+
+export async function getExchangeRates(base: string = "EUR"): Promise<ExchangeRateResponse> {
+    const {data} = await api.get<ExchangeRateResponse>("/api/summary/exchange-rates", {params: {base}});
+    return data;
+}
+
 /* 开机自启 */
 export async function getAutostart(): Promise<{ enabled: boolean }> {
     const {data} = await api.get<{ enabled: boolean }>("/api/autostart");
