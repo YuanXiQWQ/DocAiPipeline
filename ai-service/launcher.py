@@ -213,6 +213,7 @@ def main() -> None:
             """窗口关闭时触发优雅退出。"""
             shutdown_event.set()
 
+        assert _wv_window is not None
         _wv_window.events.closed += _on_closed
 
         # 启动托盘（后台线程）
