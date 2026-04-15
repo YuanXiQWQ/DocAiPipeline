@@ -34,6 +34,7 @@ from app.extraction import FactoryExtractor, LogExtractor
 from app import history
 from app.pipeline import Pipeline
 from app.preprocessing import Preprocessor
+from app.summary_writer import write_entries_from_result
 
 # 共享的预处理器实例
 _preprocessor = Preprocessor(dpi=300)
@@ -423,16 +424,31 @@ def _process_single_file(
 
     # 阶段 3：保存结果（90-100%）
     _report(90, "保存结果")
+    history_id = ""
     try:
-        history.save_record(
+        rec = history.save_record(
             doc_type=actual_type,
             filename=filename,
             pages=len(images),
             results=results,
             warnings=warnings,
         )
+        history_id = rec.id
     except Exception as e:
         logger.warning(f"保存历史记录失败: {e}")
+
+    # 写入汇总明细行
+    try:
+        from datetime import datetime
+        write_entries_from_result(
+            doc_type=actual_type,
+            filename=filename,
+            history_id=history_id,
+            results=results,
+            process_date=datetime.now().strftime("%Y-%m-%d"),
+        )
+    except Exception as e:
+        logger.warning(f"写入汇总明细失败: {e}")
 
     _report(100, "完成")
     return ProcessResponse(

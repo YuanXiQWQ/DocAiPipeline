@@ -220,8 +220,95 @@ export interface OverallSummary {
     total_pages_processed: number;
 }
 
-export async function getSummary(): Promise<OverallSummary> {
-    const {data} = await api.get<OverallSummary>("/api/summary");
+export async function getSummary(dateFrom?: string, dateTo?: string): Promise<OverallSummary> {
+    const params: Record<string, string> = {};
+    if (dateFrom) params.date_from = dateFrom;
+    if (dateTo) params.date_to = dateTo;
+    const {data} = await api.get<OverallSummary>("/api/summary", {params});
+    return data;
+}
+
+// ------------------------------------------------------------------
+// 汇总明细行
+// ------------------------------------------------------------------
+
+export interface EntryRevision {
+    revision_id: string;
+    timestamp: string;
+    author: string;
+    changes: Record<string, { old: unknown; new: unknown }>;
+    note: string;
+}
+
+export interface SummaryEntry {
+    id: string;
+    source: string;
+    history_id: string;
+    filename: string;
+    category: string;
+    metric: string;
+    date: string;
+    created_at: string;
+    value: number;
+    unit: string;
+    detail: Record<string, unknown>;
+    deleted: boolean;
+    deleted_at: string;
+    revisions: EntryRevision[];
+}
+
+export interface EntryListResponse {
+    entries: SummaryEntry[];
+    total: number;
+}
+
+export async function getSummaryEntries(params: {
+    date_from?: string;
+    date_to?: string;
+    category?: string;
+    metric?: string;
+    include_deleted?: boolean;
+    only_deleted?: boolean;
+    source?: string;
+}): Promise<EntryListResponse> {
+    const {data} = await api.get<EntryListResponse>("/api/summary/entries", {params});
+    return data;
+}
+
+export async function createSummaryEntry(req: {
+    category: string;
+    metric: string;
+    date: string;
+    value: number;
+    unit?: string;
+    detail?: Record<string, unknown>;
+    note?: string;
+}): Promise<SummaryEntry> {
+    const {data} = await api.post<SummaryEntry>("/api/summary/entries", req);
+    return data;
+}
+
+export async function updateSummaryEntry(
+    entryId: string,
+    updates: Record<string, unknown>,
+    note?: string,
+): Promise<SummaryEntry> {
+    const {data} = await api.put<SummaryEntry>(`/api/summary/entries/${entryId}`, {updates, note});
+    return data;
+}
+
+export async function deleteSummaryEntry(entryId: string): Promise<SummaryEntry> {
+    const {data} = await api.delete<SummaryEntry>(`/api/summary/entries/${entryId}`);
+    return data;
+}
+
+export async function restoreSummaryEntry(entryId: string): Promise<SummaryEntry> {
+    const {data} = await api.post<SummaryEntry>(`/api/summary/entries/${entryId}/restore`);
+    return data;
+}
+
+export async function getSummaryEntry(entryId: string): Promise<SummaryEntry> {
+    const {data} = await api.get<SummaryEntry>(`/api/summary/entries/${entryId}`);
     return data;
 }
 

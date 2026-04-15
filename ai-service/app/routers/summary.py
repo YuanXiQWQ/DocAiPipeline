@@ -1,19 +1,29 @@
-"""数据汇总路由：从历史记录中聚合各环节数据，生成进销存概览。
+"""数据汇总路由：从历史记录与明细存储中聚合各环节数据，生成进销存概览。
 
-对应规划 6.1 LKV 整体报表汇总。
-客户已有 LKV 表板统计表的公式，这里提供 Web 端的数据概览。
+支持日期范围过滤、卡片明细下钻、行级编辑与历史追溯。
 """
 
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from app.config import settings
+from app.summary_store import (
+    SummaryEntry,
+    EntryRevision,
+    query_entries,
+    save_entry,
+    update_entry,
+    soft_delete_entry,
+    restore_entry,
+    get_entry,
+)
 
 router = APIRouter(prefix="/api/summary", tags=["数据汇总"])
 
@@ -66,8 +76,8 @@ class OverallSummary(BaseModel):
 # ------------------------------------------------------------------
 
 
-def _aggregate_from_history() -> OverallSummary:
-    """从历史记录 JSON 文件中聚合统计数据。"""
+def _aggregate_from_history(*, date_from: str = "", date_to: str = "") -> OverallSummary:
+    """从历史记录 JSON 文件中聚合统计数据，支持日期范围过滤。"""
     hdir = Path(settings.output_dir) / "history"
     if not hdir.exists():
         return OverallSummary(
@@ -87,6 +97,15 @@ def _aggregate_from_history() -> OverallSummary:
             data = json.loads(f.read_text("utf-8"))
         except (json.JSONDecodeError, OSError):
             continue
+
+        # 日期过滤：取 timestamp 的日期部分
+        ts_str = data.get("timestamp", "")
+        if ts_str:
+            record_date = ts_str[:10]  # "2026-04-15T..." → "2026-04-15"
+            if date_from and record_date < date_from:
+                continue
+            if date_to and record_date > date_to:
+                continue
 
         doc_type = data.get("doc_type", "")
         results = data.get("results", [])
@@ -223,7 +242,124 @@ def _agg_packing(fac: FactorySummary, results: list[dict]) -> None:
 # ------------------------------------------------------------------
 
 
+def _this_year_range() -> tuple[str, str]:
+    """默认日期范围：今年 1月1日 ~ 12月31日。"""
+    now = datetime.now()
+    return f"{now.year}-01-01", f"{now.year}-12-31"
+
+
 @router.get("", response_model=OverallSummary)
-async def get_summary():
-    """获取全局数据汇总概览（进销存）。"""
-    return _aggregate_from_history()
+async def get_summary(
+    date_from: str = Query("", description="开始日期 YYYY-MM-DD"),
+    date_to: str = Query("", description="结束日期 YYYY-MM-DD"),
+):
+    """获取全局数据汇总概览（进销存），支持日期范围过滤。"""
+    if not date_from and not date_to:
+        date_from, date_to = _this_year_range()
+    return _aggregate_from_history(date_from=date_from, date_to=date_to)
+
+
+# ------------------------------------------------------------------
+# 明细行 API
+# ------------------------------------------------------------------
+
+
+class EntryListResponse(BaseModel):
+    """明细行列表响应。"""
+    entries: list[SummaryEntry]
+    total: int
+
+
+@router.get("/entries", response_model=EntryListResponse)
+async def list_entries(
+    date_from: str = Query(""),
+    date_to: str = Query(""),
+    category: str = Query(""),
+    metric: str = Query(""),
+    include_deleted: bool = Query(False),
+    only_deleted: bool = Query(False),
+    source: str = Query(""),
+):
+    """查询明细行列表。"""
+    if not date_from and not date_to:
+        date_from, date_to = _this_year_range()
+    entries = query_entries(
+        date_from=date_from,
+        date_to=date_to,
+        category=category,
+        metric=metric,
+        include_deleted=include_deleted,
+        only_deleted=only_deleted,
+        source=source,
+    )
+    return EntryListResponse(entries=entries, total=len(entries))
+
+
+class EntryCreateRequest(BaseModel):
+    """手动新增明细行请求。"""
+    category: str
+    metric: str
+    date: str
+    value: float
+    unit: str = ""
+    detail: dict[str, Any] = {}
+    note: str = ""
+
+
+@router.post("/entries", response_model=SummaryEntry)
+async def create_entry(req: EntryCreateRequest):
+    """手动新增一条明细行。"""
+    entry = SummaryEntry(
+        source="manual",
+        category=req.category,
+        metric=req.metric,
+        date=req.date,
+        value=req.value,
+        unit=req.unit,
+        detail=req.detail,
+    )
+    if req.note:
+        entry.revisions.append(EntryRevision(author="user", note=req.note))
+    return save_entry(entry)
+
+
+class EntryUpdateRequest(BaseModel):
+    """更新明细行请求。"""
+    updates: dict[str, Any]  # {field: new_value}
+    note: str = ""
+
+
+@router.put("/entries/{entry_id}", response_model=SummaryEntry)
+async def update_entry_api(entry_id: str, req: EntryUpdateRequest):
+    """更新一条明细行（自动记录修订历史）。"""
+    result = update_entry(entry_id, req.updates, author="user", note=req.note)
+    if not result:
+        raise HTTPException(404, "明细行不存在")
+    return result
+
+
+@router.delete("/entries/{entry_id}", response_model=SummaryEntry)
+async def delete_entry_api(entry_id: str):
+    """软删除一条明细行。"""
+    result = soft_delete_entry(entry_id)
+    if not result:
+        raise HTTPException(404, "明细行不存在")
+    return result
+
+
+@router.post("/entries/{entry_id}/restore", response_model=SummaryEntry)
+async def restore_entry_api(entry_id: str):
+    """恢复一条软删除的明细行。"""
+    result = restore_entry(entry_id)
+    if not result:
+        raise HTTPException(404, "明细行不存在")
+    return result
+
+
+@router.get("/entries/{entry_id}", response_model=SummaryEntry)
+async def get_entry_api(entry_id: str):
+    """获取单条明细行（含修订历史）。"""
+    entry = get_entry(entry_id)
+    if not entry:
+        raise HTTPException(404, "明细行不存在")
+    return entry
