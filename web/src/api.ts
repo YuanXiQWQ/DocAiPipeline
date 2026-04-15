@@ -112,3 +112,115 @@ export const DOC_TYPE_LABELS: Record<string, string> = {
   slicing: "刨切木方上机表",
   packing: "表板打包报表",
 };
+
+// ------------------------------------------------------------------
+// 历史记录
+// ------------------------------------------------------------------
+
+export interface HistorySummary {
+  id: string;
+  timestamp: string;
+  doc_type: string;
+  filename: string;
+  pages: number;
+  record_count: number;
+  filled: boolean;
+  fill_filename: string;
+}
+
+export interface HistoryListResponse {
+  records: HistorySummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface HistoryStats {
+  total_records: number;
+  by_doc_type: Record<string, number>;
+  total_pages_processed: number;
+  total_entries_extracted: number;
+  recent_7_days: number;
+}
+
+export interface HistoryDetail {
+  id: string;
+  timestamp: string;
+  doc_type: string;
+  filename: string;
+  pages: number;
+  record_count: number;
+  warnings: string[];
+  results: Record<string, unknown>[];
+  filled: boolean;
+  fill_filename: string;
+}
+
+export async function listHistory(params?: {
+  doc_type?: string;
+  keyword?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<HistoryListResponse> {
+  const { data } = await api.get<HistoryListResponse>("/api/history", {
+    params,
+  });
+  return data;
+}
+
+export async function getHistoryStats(): Promise<HistoryStats> {
+  const { data } = await api.get<HistoryStats>("/api/history/stats");
+  return data;
+}
+
+export async function getHistoryDetail(id: string): Promise<HistoryDetail> {
+  const { data } = await api.get<HistoryDetail>(`/api/history/${id}`);
+  return data;
+}
+
+export async function deleteHistory(id: string): Promise<void> {
+  await api.delete(`/api/history/${id}`);
+}
+
+// ------------------------------------------------------------------
+// 数据汇总
+// ------------------------------------------------------------------
+
+export interface ImportSummary {
+  total_batches: number;
+  total_invoices: number;
+  total_amount_eur: number;
+  total_volume_m3: number;
+  suppliers: Record<string, number>;
+}
+
+export interface LogSummaryData {
+  total_inbound_logs: number;
+  total_inbound_m3: number;
+  total_outbound_logs: number;
+  total_outbound_m3: number;
+  batches: number;
+}
+
+export interface FactorySummaryData {
+  soak_pool_logs: number;
+  soak_pool_m3: number;
+  slicing_logs: number;
+  slicing_output_m2: number;
+  packing_pieces: number;
+  packing_area_m2: number;
+  packing_packages: number;
+}
+
+export interface OverallSummary {
+  import_summary: ImportSummary;
+  log_summary: LogSummaryData;
+  factory_summary: FactorySummaryData;
+  total_documents_processed: number;
+  total_pages_processed: number;
+}
+
+export async function getSummary(): Promise<OverallSummary> {
+  const { data } = await api.get<OverallSummary>("/api/summary");
+  return data;
+}

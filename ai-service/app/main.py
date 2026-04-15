@@ -7,6 +7,8 @@
 - /api/fill — Excel 填充
 - /api/templates — 模板管理
 - /api/download — 文件下载
+- /api/history — 处理历史记录查询
+- /api/history/stats — 历史数据统计
 - /process — 兼容旧版进口单据端点
 """
 
@@ -26,7 +28,7 @@ from loguru import logger
 
 from app.config import AVAILABLE_MODELS, settings
 from app.pipeline import Pipeline
-from app.routers import fill, process
+from app.routers import fill, history_router, process, summary
 from app.schemas import HealthResponse, PipelineResult
 
 # 懒加载管线（模型较重）
@@ -70,6 +72,8 @@ app.add_middleware(
 # 注册路由
 app.include_router(process.router)
 app.include_router(fill.router)
+app.include_router(history_router.router)
+app.include_router(summary.router)
 
 
 # ------------------------------------------------------------------

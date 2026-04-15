@@ -12,8 +12,12 @@ import {
   Scissors,
   ClipboardList,
   Settings,
+  Clock,
+  BarChart3,
 } from "lucide-react";
 import SettingsPanel from "./SettingsPanel";
+import HistoryPanel from "./HistoryPanel";
+import DashboardPanel from "./DashboardPanel";
 import {
   classifyDocument,
   processDocument,
@@ -53,6 +57,8 @@ export default function App() {
   const [dragging, setDragging] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showDashboard, setShowDashboard] = useState(false);
   const [needsSetup, setNeedsSetup] = useState(false);
 
   useEffect(() => {
@@ -170,6 +176,20 @@ export default function App() {
                 title={backendOk ? "后端已连接" : "后端未连接"}
               />
             )}
+            <button
+              onClick={() => setShowDashboard(true)}
+              className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
+              title="数据汇总"
+            >
+              <BarChart3 className="w-5 h-5 text-slate-500" />
+            </button>
+            <button
+              onClick={() => setShowHistory(true)}
+              className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
+              title="处理历史"
+            >
+              <Clock className="w-5 h-5 text-slate-500" />
+            </button>
             <button
               onClick={() => setShowSettings(true)}
               className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
@@ -605,6 +625,28 @@ export default function App() {
             .catch(() => {});
         }}
       />
+
+      {/* 历史记录面板 */}
+      {showHistory && (
+        <HistoryPanel
+          onClose={() => setShowHistory(false)}
+          onLoadResult={(detail) => {
+            setResult({
+              doc_type: detail.doc_type,
+              filename: detail.filename,
+              pages: detail.pages,
+              results: detail.results,
+              warnings: detail.warnings,
+            });
+            setStep("review");
+          }}
+        />
+      )}
+
+      {/* 数据汇总看板 */}
+      {showDashboard && (
+        <DashboardPanel onClose={() => setShowDashboard(false)} />
+      )}
     </div>
   );
 }

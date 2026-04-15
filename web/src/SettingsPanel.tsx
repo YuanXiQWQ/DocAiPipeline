@@ -17,6 +17,7 @@ import {
   type UserSettings,
   type ModelInfo,
 } from "./api";
+import { getCurrentLocale, setLocale, LOCALE_OPTIONS, type Locale } from "./i18n";
 
 interface Props {
   open: boolean;
@@ -37,6 +38,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
   const [showKey, setShowKey] = useState(false);
   const [selectedModel, setSelectedModel] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
+  const [language, setLanguage] = useState<Locale>(getCurrentLocale());
 
   // 加载设置
   useEffect(() => {
@@ -64,6 +66,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
       const body: Record<string, string> = {
         openai_model: selectedModel,
         openai_base_url: baseUrl,
+        language: language,
       };
       // 只在用户输入了新 key 时才更新
       if (apiKey.trim()) {
@@ -72,6 +75,8 @@ export default function SettingsPanel({ open, onClose }: Props) {
       const res = await updateSettings(body);
       setCurrentSettings(res.settings);
       setApiKey("");
+      // 同步前端语言
+      setLocale(language);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
@@ -79,7 +84,7 @@ export default function SettingsPanel({ open, onClose }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [apiKey, selectedModel, baseUrl]);
+  }, [apiKey, selectedModel, baseUrl, language]);
 
   if (!open) return null;
 
@@ -221,6 +226,28 @@ export default function SettingsPanel({ open, onClose }: Props) {
                 </p>
               </div>
             </details>
+
+            {/* 界面语言 */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                界面语言 / Language
+              </label>
+              <div className="flex gap-2">
+                {LOCALE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setLanguage(opt.value)}
+                    className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${
+                      language === opt.value
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-slate-200 text-slate-600 hover:border-slate-300"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {/* 错误/成功提示 */}
             {error && (

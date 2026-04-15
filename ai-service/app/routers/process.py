@@ -28,6 +28,7 @@ from pydantic import BaseModel
 
 from app.config import settings
 from app.extraction import FactoryExtractor, LogExtractor
+from app import history
 from app.pipeline import Pipeline
 from app.preprocessing import Preprocessor
 
@@ -313,6 +314,18 @@ async def process_document(
     except Exception as e:
         logger.error(f"处理失败: {filename} ({actual_type}): {e}")
         raise HTTPException(500, f"处理失败: {e}")
+
+    # 自动保存处理历史
+    try:
+        history.save_record(
+            doc_type=actual_type,
+            filename=filename,
+            pages=len(images),
+            results=results,
+            warnings=warnings,
+        )
+    except Exception as e:
+        logger.warning(f"保存历史记录失败: {e}")
 
     return ProcessResponse(
         doc_type=actual_type,
