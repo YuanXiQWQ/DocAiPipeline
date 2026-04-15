@@ -115,7 +115,29 @@ async def update_settings(body: dict):
 
 
 # ------------------------------------------------------------------
-# 开机自启
+# 平台检测（桌面 exe vs Web 部署）
+# ------------------------------------------------------------------
+
+APP_VERSION = app.version
+
+
+def _is_desktop() -> bool:
+    """是否以 PyInstaller 打包的桌面模式运行。"""
+    import sys
+    return getattr(sys, "frozen", False)
+
+
+@app.get("/api/platform")
+async def get_platform():
+    """返回当前运行模式，前端据此显示/隐藏桌面专属功能。"""
+    return {
+        "desktop": _is_desktop(),
+        "version": APP_VERSION,
+    }
+
+
+# ------------------------------------------------------------------
+# 开机自启（桌面专属）
 # ------------------------------------------------------------------
 
 # Windows 注册表路径
@@ -185,7 +207,6 @@ async def update_autostart(body: dict):
 # 版本与更新检查
 # ------------------------------------------------------------------
 
-APP_VERSION = app.version
 GITHUB_REPO = "YuanXiQWQ/DocAiPipeline"
 
 

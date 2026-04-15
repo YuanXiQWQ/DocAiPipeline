@@ -330,6 +330,17 @@ export async function getExchangeRates(base: string = "EUR"): Promise<ExchangeRa
     return data;
 }
 
+/* 平台检测 */
+export interface PlatformInfo {
+    desktop: boolean;
+    version: string;
+}
+
+export async function getPlatform(): Promise<PlatformInfo> {
+    const {data} = await api.get<PlatformInfo>("/api/platform");
+    return data;
+}
+
 /* 开机自启 */
 export async function getAutostart(): Promise<{ enabled: boolean }> {
     const {data} = await api.get<{ enabled: boolean }>("/api/autostart");

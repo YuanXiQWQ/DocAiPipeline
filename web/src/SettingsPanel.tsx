@@ -15,6 +15,7 @@ import {
 import {
     getSettings,
     updateSettings,
+    getPlatform,
     getAutostart,
     setAutostart as apiSetAutostart,
     checkUpdate,
@@ -50,7 +51,11 @@ export default function SettingsPanel({onSettingsChange}: Props) {
     const [autostart, setAutostartState] = useState(false);
     const [autostartLoading, setAutostartLoading] = useState(false);
 
-    // 版本与更新
+    // 平台检测
+    const [isDesktop, setIsDesktop] = useState(false);
+    const [appVersion, setAppVersion] = useState("");
+
+    // 版本与更新（桌面专属）
     const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
     const [updateLoading, setUpdateLoading] = useState(false);
     const [updateError, setUpdateError] = useState<string | null>(null);
@@ -62,14 +67,17 @@ export default function SettingsPanel({onSettingsChange}: Props) {
         setSaved(false);
         Promise.all([
             getSettings(),
+            getPlatform().catch(() => ({desktop: false, version: ""})),
             getAutostart().catch(() => ({enabled: false})),
         ])
-            .then(([res, autostartRes]) => {
+            .then(([res, platformRes, autostartRes]) => {
                 setCurrentSettings(res.settings);
                 setModels(res.available_models);
                 setSelectedModel(res.settings.openai_model);
                 setBaseUrl(res.settings.openai_base_url);
                 setApiKey("");
+                setIsDesktop(platformRes.desktop);
+                setAppVersion(platformRes.version);
                 setAutostartState(autostartRes.enabled);
             })
             .catch((err) => setError(extractErrorMessage(err)))
@@ -235,7 +243,8 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                             </div>
                         </details>
 
-                        {/* 开机自启 */}
+                        {/* 开机自启（桌面专属） */}
+                        {isDesktop && (
                         <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
                             <div className="flex items-center gap-3">
                                 <Power className="w-5 h-5 text-slate-500"/>
@@ -268,6 +277,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                 />
                             </button>
                         </div>
+                        )}
 
                         {/* 界面语言 */}
                         <div>
@@ -303,7 +313,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                             </div>
                         )}
 
-                    {/* 关于 & 检查更新 */}
+                    {/* 关于 & 版本 */}
                     <div className="p-4 bg-slate-50 rounded-xl space-y-3">
                         <div className="flex items-center gap-2">
                             <Info className="w-4 h-4 text-slate-500"/>
@@ -313,9 +323,11 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                             <div className="text-sm text-slate-500">
                                 <span>{t("settings.update_current")}: </span>
                                 <span className="font-mono font-medium text-slate-700">
-                                    {versionInfo?.current ?? "..."}
+                                    {versionInfo?.current ?? appVersion || "..."}
                                 </span>
                             </div>
+                            {/* 检查更新（桌面专属） */}
+                            {isDesktop && (
                             <button
                                 onClick={async () => {
                                     setUpdateLoading(true);
@@ -339,6 +351,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                 )}
                                 {updateLoading ? t("settings.update_checking") : t("settings.update")}
                             </button>
+                            )}
                         </div>
                         {versionInfo && !versionInfo.has_update && (
                             <p className="text-xs text-emerald-600 flex items-center gap-1">
