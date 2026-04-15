@@ -154,6 +154,7 @@ interface DetailViewProps {
 
 function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: DetailViewProps) {
     const t = useT();
+    const displayUnit = unitLabel(unit);
     const [entries, setEntries] = useState<SummaryEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(false);
@@ -255,7 +256,7 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
             <div className="bg-white rounded-xl border border-gray-200 p-5">
                 <h3 className="text-lg font-semibold text-gray-900 mb-1">{title}</h3>
                 <p className="text-sm text-gray-500 mb-4">{dateFrom} ~ {dateTo}</p>
-                <p className="text-3xl font-bold text-gray-900">{fmtNum(totalValue)} <span className="text-base font-normal text-gray-500">{unit}</span></p>
+                <p className="text-3xl font-bold text-gray-900">{fmtNum(totalValue)} <span className="text-base font-normal text-gray-500">{displayUnit}</span></p>
             </div>
 
             {/* 明细表格 */}
@@ -317,7 +318,7 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
                                         {editingRow === entry.id ? (
                                             <input type="number" step="any" value={editValue} onChange={e => setEditValue(e.target.value)} className="border rounded px-2 py-1 text-xs w-28 text-right"/>
                                         ) : (
-                                            <span className={entry.deleted ? "line-through" : ""}>{fmtNum(entry.value)} {unit}</span>
+                                            <span className={entry.deleted ? "line-through" : ""}>{fmtNum(entry.value)} {displayUnit}</span>
                                         )}
                                     </td>
                                     <td className="px-4 py-2.5 text-center">
