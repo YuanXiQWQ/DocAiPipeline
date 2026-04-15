@@ -110,7 +110,7 @@ class Settings(BaseSettings):
             encoding="utf-8",
         )
 
-    def get_user_settings(self) -> dict[str, str]:
+    def get_user_settings(self) -> dict[str, str | bool]:
         """返回用户可配置的当前值（隐藏 API Key 中间部分）。"""
         key = self.openai_api_key
         if len(key) > 12:

@@ -1,3 +1,5 @@
+// noinspection JSUnusedGlobalSymbols
+
 /**
  * 轻量级 i18n 国际化模块。
  *

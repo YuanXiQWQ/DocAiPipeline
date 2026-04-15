@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 
 from app import history
-from app.history import HistoryRecord, HistoryStats, HistorySummary
+from app.history import HistoryRecord, HistoryStats
 
 router = APIRouter(prefix="/api/history", tags=["历史记录"])
 

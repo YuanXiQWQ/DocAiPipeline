@@ -15,12 +15,12 @@ from __future__ import annotations
 
 import os
 import sys
-import signal
 import socket
 import threading
 import time
 import webbrowser
 from pathlib import Path
+from typing import Any
 
 import uvicorn
 from loguru import logger
@@ -69,7 +69,7 @@ def _base_dir() -> Path:
     """获取应用根目录（兼容 PyInstaller 打包后的临时目录）。"""
     if getattr(sys, "frozen", False):
         # PyInstaller 打包后，_MEIPASS 是解压临时目录
-        return Path(sys._MEIPASS)  # type: ignore[attr-defined]
+        return Path(getattr(sys, "_MEIPASS"))  # PyInstaller 打包后的临时目录
     return Path(__file__).resolve().parent
 
 
@@ -87,7 +87,8 @@ def _run_tray(host: str, port: int, shutdown_event: threading.Event) -> None:
         logger.warning("pystray/Pillow 未安装，跳过系统托盘（使用 Ctrl+C 退出）")
         return
 
-    url = f"http://{host}:{port}"
+    # noinspection HttpUrlsUsage
+    url = f"http://{host}:{port}"  # noqa: S310 — localhost 不需要 HTTPS
 
     # 加载图标
     icon_path = _base_dir() / ICON_FILE
@@ -97,10 +98,10 @@ def _run_tray(host: str, port: int, shutdown_event: threading.Event) -> None:
         # 生成一个简单的绿色方块作为默认图标
         image = Image.new("RGB", (64, 64), color=(16, 185, 129))
 
-    def on_open(_icon: pystray.Icon, _item: pystray.MenuItem) -> None:
+    def on_open(_icon: Any, _item: Any) -> None:
         webbrowser.open(url)
 
-    def on_quit(_icon: pystray.Icon, _item: pystray.MenuItem) -> None:
+    def on_quit(_icon: Any, _item: Any) -> None:
         shutdown_event.set()
         _icon.stop()
 
@@ -128,7 +129,8 @@ def main() -> None:
     # 查找可用端口
     port = _find_free_port(DEFAULT_PORT)
     host = DEFAULT_HOST
-    url = f"http://{host}:{port}"
+    # noinspection HttpUrlsUsage
+    url = f"http://{host}:{port}"  # noqa: S310 — localhost 不需要 HTTPS
 
     logger.info(f"{APP_NAME} 正在启动…")
     logger.info(f"工作目录: {base}")

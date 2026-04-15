@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Clock,
   FileText,
@@ -37,7 +37,6 @@ export default function HistoryPanel({ onClose, onLoadResult }: HistoryPanelProp
   const [filterType, setFilterType] = useState<string>("");
   const [keyword, setKeyword] = useState("");
   const [detail, setDetail] = useState<HistoryDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
   const limit = 20;
 
   const fetchData = useCallback(async () => {
@@ -63,28 +62,25 @@ export default function HistoryPanel({ onClose, onLoadResult }: HistoryPanelProp
   }, [filterType, keyword, offset]);
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
   }, [fetchData]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("确定删除此记录？")) return;
     try {
       await deleteHistory(id);
-      fetchData();
+      await fetchData();
     } catch (err) {
       alert("删除失败: " + extractErrorMessage(err));
     }
   };
 
   const handleDetail = async (id: string) => {
-    setDetailLoading(true);
     try {
       const d = await getHistoryDetail(id);
       setDetail(d);
     } catch (err) {
       alert("获取详情失败: " + extractErrorMessage(err));
-    } finally {
-      setDetailLoading(false);
     }
   };
 
@@ -312,7 +308,7 @@ export default function HistoryPanel({ onClose, onLoadResult }: HistoryPanelProp
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDelete(r.id);
+                      void handleDelete(r.id);
                     }}
                     className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition"
                   >
