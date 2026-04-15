@@ -436,6 +436,13 @@ export default function App() {
                             handleFill={handleFill}
                             handleReset={handleReset}
                             handleGoHome={handleGoHome}
+                            scanAvailable={scanAvailable}
+                            scanDevices={scanDevices}
+                            scanSelectedDevice={scanSelectedDevice}
+                            setScanSelectedDevice={setScanSelectedDevice}
+                            scanning={scanning}
+                            scanMsg={scanMsg}
+                            handleScan={handleScan}
                         />
                     }/>
                 </Routes>
@@ -457,6 +464,8 @@ function ProcessingFlow({
                             inputRef, dragging, setDragging, preview,
                             needsSetup, handleFileSelect, handleDrop,
                             handleProcess, handleAbortAll, handleFill, handleReset, handleGoHome,
+                            scanAvailable, scanDevices, scanSelectedDevice, setScanSelectedDevice,
+                            scanning, scanMsg, handleScan,
                         }: {
     t: (key: string) => string;
     view: View;
@@ -483,6 +492,13 @@ function ProcessingFlow({
     handleFill: () => void;
     handleReset: () => void;
     handleGoHome: () => void;
+    scanAvailable: boolean;
+    scanDevices: ScannerDevice[];
+    scanSelectedDevice: string;
+    setScanSelectedDevice: (id: string) => void;
+    scanning: boolean;
+    scanMsg: string;
+    handleScan: () => void;
 }) {
     const statusLabel: Record<FileStatus, string> = {
         waiting: t("upload.file_waiting"),
