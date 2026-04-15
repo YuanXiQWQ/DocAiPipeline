@@ -26,9 +26,11 @@ import {
     deleteSummaryEntry,
     restoreSummaryEntry,
     getExchangeRates,
+    listHistory,
     extractErrorMessage,
     type OverallSummary,
     type SummaryEntry,
+    type HistorySummary,
 } from "./api";
 import {useT} from "./i18n";
 
@@ -413,8 +415,87 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
 }
 
 /* ============================================================== */
-/* 主看板                                                         */
+/* 处理记录列表（只读）                                            */
 /* ============================================================== */
+
+const DOC_TYPES = ["customs", "log_measurement", "log_output", "soak_pool", "slicing", "packing"];
+
+function HistoryListView({title, docType, onBack}: {
+    title: string;
+    docType?: string;
+    onBack: () => void;
+}) {
+    const t = useT();
+    const [records, setRecords] = useState<HistorySummary[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [filterType, setFilterType] = useState(docType ?? "");
+
+    const fetchRecords = useCallback(() => {
+        setLoading(true);
+        listHistory({doc_type: filterType || undefined, limit: 500})
+            .then(r => setRecords(r.records))
+            .finally(() => setLoading(false));
+    }, [filterType]);
+
+    useEffect(() => { fetchRecords(); }, [fetchRecords]);
+
+    const totalPages = records.reduce((s, r) => s + r.pages, 0);
+
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <button onClick={onBack} className="flex items-center gap-1 text-sm text-blue-600 hover:underline">
+                    <ArrowLeft className="w-4 h-4"/> {t("dashboard.back")}
+                </button>
+                <div className="flex items-center gap-2">
+                    <select value={filterType} onChange={e => setFilterType(e.target.value)}
+                            className="border border-gray-200 rounded-lg px-2 py-1 text-sm">
+                        <option value="">{t("dashboard.all_types")}</option>
+                        {DOC_TYPES.map(dt => <option key={dt} value={dt}>{t(`doc_type.${dt}`)}</option>)}
+                    </select>
+                </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">{title}</h3>
+                <p className="text-sm text-gray-500">{records.length} {t("dashboard.unit_doc")} · {totalPages} {t("dashboard.unit_page")}</p>
+            </div>
+
+            {loading ? (
+                <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-blue-500"/></div>
+            ) : records.length === 0 ? (
+                <p className="text-center text-gray-400 py-10">{t("dashboard.no_entries")}</p>
+            ) : (
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <table className="min-w-full text-sm">
+                        <thead>
+                        <tr className="bg-gray-50 text-gray-600">
+                            <th className="px-4 py-2.5 text-left font-medium">{t("dashboard.col_date")}</th>
+                            <th className="px-4 py-2.5 text-left font-medium">{t("dashboard.col_filename")}</th>
+                            <th className="px-4 py-2.5 text-left font-medium">{t("dashboard.col_doctype")}</th>
+                            <th className="px-4 py-2.5 text-right font-medium">{t("dashboard.col_pages")}</th>
+                            <th className="px-4 py-2.5 text-right font-medium">{t("dashboard.col_records")}</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {records.map(r => (
+                            <tr key={r.id} className="border-t border-gray-100 hover:bg-gray-50">
+                                <td className="px-4 py-2.5 text-gray-700">{r.timestamp.slice(0, 10)}</td>
+                                <td className="px-4 py-2.5 text-gray-600 truncate max-w-[250px]">{r.filename}</td>
+                                <td className="px-4 py-2.5">
+                                    <span className="px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-600">{t(`doc_type.${r.doc_type}`)}</span>
+                                </td>
+                                <td className="px-4 py-2.5 text-right font-mono">{r.pages}</td>
+                                <td className="px-4 py-2.5 text-right font-mono">{r.record_count}</td>
+                            </tr>
+                        ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+}
 
 /* ============================================================== */
 /* 筛选面板（展开式）                                              */
@@ -545,6 +626,8 @@ export default function DashboardPanel() {
 
     /* 明细视图状态 */
     const [detailView, setDetailView] = useState<{title: string; category: string; metric: string; unit: string} | null>(null);
+    /* 历史记录列表视图状态 */
+    const [historyView, setHistoryView] = useState<{title: string; docType?: string} | null>(null);
 
     const fetchData = useCallback(() => {
         setLoading(true);
@@ -573,11 +656,32 @@ export default function DashboardPanel() {
         setDetailView({title, category, metric, unit});
     };
 
+    const openHistory = (title: string, docType?: string) => {
+        setHistoryView({title, docType});
+    };
+
     const resetAll = () => {
         setDateFrom(defFrom);
         setDateTo(defTo);
         setUnits({...DEFAULT_UNITS});
     };
+
+    /* 历史记录列表视图 */
+    if (historyView) {
+        return (
+            <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-2">
+                    <BarChart3 className="w-6 h-6 text-blue-600"/>
+                    <h2 className="text-xl font-semibold text-gray-900">{t("dashboard.history_list_title")}</h2>
+                </div>
+                <HistoryListView
+                    title={historyView.title}
+                    docType={historyView.docType}
+                    onBack={() => setHistoryView(null)}
+                />
+            </div>
+        );
+    }
 
     /* 明细视图 */
     if (detailView) {
@@ -630,9 +734,9 @@ export default function DashboardPanel() {
                         <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">{t("dashboard.overview")}</h3>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <StatCard icon={<BarChart3 className="w-5 h-5 text-blue-500"/>} label={t("dashboard.docs_processed")} value={data.total_documents_processed} unit={t("dashboard.unit_doc")} color="bg-blue-50 border-blue-200"
-                                      onClick={() => openDetail(t("dashboard.docs_processed"), "", "", "")}/>
+                                      onClick={() => openHistory(t("dashboard.docs_processed"))}/>
                             <StatCard icon={<BarChart3 className="w-5 h-5 text-indigo-500"/>} label={t("dashboard.pages_processed")} value={data.total_pages_processed} unit={t("dashboard.unit_page")} color="bg-indigo-50 border-indigo-200"
-                                      onClick={() => openDetail(t("dashboard.pages_processed"), "", "", "")}/>
+                                      onClick={() => openHistory(t("dashboard.pages_processed"))}/>
                             <StatCard icon={<ArrowDownCircle className="w-5 h-5 text-emerald-500"/>} label={t("dashboard.log_inbound")} value={cv(data.log_summary.total_inbound_m3, "m3").value} unit={cv(data.log_summary.total_inbound_m3, "m3").unit} color="bg-emerald-50 border-emerald-200"
                                       onClick={() => openDetail(t("dashboard.inbound_volume"), "log_inbound", "inbound_batch", "m3")}/>
                             <StatCard icon={<ArrowUpCircle className="w-5 h-5 text-amber-500"/>} label={t("dashboard.log_outbound")} value={cv(data.log_summary.total_outbound_m3, "m3").value} unit={cv(data.log_summary.total_outbound_m3, "m3").unit} color="bg-amber-50 border-amber-200"
@@ -647,13 +751,13 @@ export default function DashboardPanel() {
                         </h3>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.batches")} value={data.import_summary.total_batches} color="bg-sky-50 border-sky-200"
-                                      onClick={() => openDetail(t("dashboard.batches"), "import", "", "")}/>
+                                      onClick={() => openHistory(t("dashboard.batches"), "customs")}/>
                             <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.invoices")} value={data.import_summary.total_invoices} color="bg-sky-50 border-sky-200"
-                                      onClick={() => openDetail(t("dashboard.invoices"), "import", "customs_record", "EUR")}/>
+                                      onClick={() => openHistory(t("dashboard.invoices"), "customs")}/>
                             <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.total_amount")} value={cv(data.import_summary.total_amount_eur, "EUR").value} unit={cv(data.import_summary.total_amount_eur, "EUR").unit} color="bg-sky-50 border-sky-200"
                                       onClick={() => openDetail(t("dashboard.total_amount"), "import", "customs_record", "EUR")}/>
                             <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.total_volume")} value={cv(data.import_summary.total_volume_m3, "m3").value} unit={cv(data.import_summary.total_volume_m3, "m3").unit} color="bg-sky-50 border-sky-200"
-                                      onClick={() => openDetail(t("dashboard.total_volume"), "import", "customs_record", "EUR")}/>
+                                      onClick={() => openDetail(t("dashboard.total_volume"), "import", "customs_record", "m3")}/>
                         </div>
                         {Object.keys(data.import_summary.suppliers).length > 0 && (
                             <div className="mt-3 flex flex-wrap gap-2">
