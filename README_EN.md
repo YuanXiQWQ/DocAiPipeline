@@ -41,8 +41,9 @@ DocAiPipeline/
 │   │   ├── App.tsx              # Main app (upload→extract→review→export)
 │   │   └── api.ts               # API service layer
 │   └── package.json
-├── docker-compose.yml            # One-click deployment
-└── 文档/                         # Project plans & sample data
+├── build_desktop.py               # One-click desktop .exe build script
+├── docker-compose.yml             # Docker one-click deployment
+└── 文档/                          # Project plans & sample data
 ```
 
 ## Quick Start
@@ -66,7 +67,27 @@ npm run dev                       # → http://localhost:5173
 
 Open `http://localhost:5173` to test the full workflow.
 
-### Option 2: Docker Deployment
+### Option 2: Desktop App (recommended for non-technical users)
+
+**Prerequisites**: Python 3.11+, Node.js 18+
+
+```bash
+# One-click build
+python build_desktop.py
+
+# Output: dist/DocAI-Pipeline.exe
+# Double-click to run, browser opens automatically, system tray icon appears
+# First run will auto-open settings panel — enter your OpenAI API Key
+```
+
+You can also run the launcher script directly (without packaging):
+
+```bash
+cd ai-service
+python launcher.py               # → http://127.0.0.1:8000
+```
+
+### Option 3: Docker Deployment
 
 ```bash
 # Create .env file
@@ -99,7 +120,7 @@ Full API docs: visit `http://localhost:8000/docs` after starting the backend.
 - **AI Backend**: Python, FastAPI, OpenCV, PyMuPDF, Ultralytics YOLO, OpenAI VLM (gpt-4.1-mini)
 - **Excel Engine**: openpyxl (preserves formulas, formatting, and pivot tables)
 - **Web Frontend**: React 19, TypeScript, Vite, TailwindCSS v4, Lucide Icons
-- **Deployment**: Docker Compose (Nginx reverse proxy + Python backend)
+- **Deployment**: Docker Compose / PyInstaller desktop .exe / Local dev
 
 ## License
 

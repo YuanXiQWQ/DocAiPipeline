@@ -20,7 +20,8 @@ from typing import AsyncIterator
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.config import AVAILABLE_MODELS, settings
@@ -149,6 +150,46 @@ async def download_legacy(filename: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail=f"File not found: {filename}")
     return FileResponse(path=str(file_path), filename=filename)
+
+
+# ------------------------------------------------------------------
+# 前端静态文件托管（桌面模式 / 生产构建）
+# ------------------------------------------------------------------
+
+# 查找前端构建产物目录（支持多种相对路径）
+_FRONTEND_CANDIDATES = [
+    Path(__file__).resolve().parent.parent / "web_dist",       # PyInstaller 打包后
+    Path(__file__).resolve().parent.parent.parent / "web" / "dist",  # 开发目录
+]
+_frontend_dir: Path | None = None
+for _candidate in _FRONTEND_CANDIDATES:
+    if _candidate.is_dir() and (_candidate / "index.html").exists():
+        _frontend_dir = _candidate
+        break
+
+if _frontend_dir is not None:
+    # 挂载静态资源（JS/CSS/图片等）
+    app.mount("/assets", StaticFiles(directory=str(_frontend_dir / "assets")), name="frontend-assets")
+    # 挂载 public 下的静态文件（favicon 等）
+    for _static_file in _frontend_dir.iterdir():
+        if _static_file.is_file() and _static_file.name != "index.html":
+            pass  # 由 SPA 回退路由处理
+
+    # SPA 回退：所有未匹配的 GET 请求返回 index.html
+    _index_html = (_frontend_dir / "index.html").read_text("utf-8")
+
+    @app.get("/{path:path}", response_class=HTMLResponse, include_in_schema=False)
+    async def _spa_fallback(path: str):
+        """SPA 回退：将前端路由交给 index.html 处理。"""
+        # 先检查是否是静态文件
+        static_file = _frontend_dir / path  # type: ignore[operator]
+        if static_file.is_file():
+            return FileResponse(str(static_file))
+        return HTMLResponse(_index_html)
+
+    logger.info(f"前端静态文件已挂载: {_frontend_dir}")
+else:
+    logger.info("未找到前端构建产物，仅提供 API 服务（前端需单独启动）")
 
 
 if __name__ == "__main__":

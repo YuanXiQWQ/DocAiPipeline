@@ -19,6 +19,7 @@ import {
   processDocument,
   fillExcel,
   healthCheck,
+  getSettings,
   extractErrorMessage,
   DOC_TYPE_LABELS,
   type ClassifyResult,
@@ -52,10 +53,21 @@ export default function App() {
   const [dragging, setDragging] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [needsSetup, setNeedsSetup] = useState(false);
 
   useEffect(() => {
     healthCheck()
-      .then(() => setBackendOk(true))
+      .then(() => {
+        setBackendOk(true);
+        // 首次运行引导：检测 API Key 是否已设置
+        return getSettings();
+      })
+      .then((res) => {
+        if (!res.settings.openai_api_key_set) {
+          setNeedsSetup(true);
+          setShowSettings(true);
+        }
+      })
       .catch(() => setBackendOk(false));
   }, []);
 
@@ -170,6 +182,25 @@ export default function App() {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-10">
+        {/* 首次运行引导横幅 */}
+        {needsSetup && step === "upload" && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-amber-800 font-medium">欢迎使用 DocAI Pipeline！</p>
+              <p className="text-amber-600 text-sm mt-1">
+                首次使用前，请先设置 OpenAI API Key 以启用文档识别功能。
+              </p>
+            </div>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="px-4 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium shrink-0"
+            >
+              前往设置
+            </button>
+          </div>
+        )}
+
         {/* 步骤指示器 */}
         <div className="flex items-center justify-center gap-2 mb-10">
           {(
@@ -538,7 +569,16 @@ export default function App() {
       </footer>
 
       {/* 设置面板 */}
-      <SettingsPanel open={showSettings} onClose={() => setShowSettings(false)} />
+      <SettingsPanel
+        open={showSettings}
+        onClose={() => {
+          setShowSettings(false);
+          // 关闭设置后重新检查 key 状态
+          getSettings()
+            .then((res) => setNeedsSetup(!res.settings.openai_api_key_set))
+            .catch(() => {});
+        }}
+      />
     </div>
   );
 }

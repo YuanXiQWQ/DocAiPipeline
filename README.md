@@ -40,8 +40,9 @@ DocAiPipeline/
 │   │   ├── App.tsx              # 主应用（上传→识别→复核→导出）
 │   │   └── api.ts               # API 服务层
 │   └── package.json
-├── docker-compose.yml            # 一键部署
-└── 文档/                         # 项目规划与样例数据
+├── build_desktop.py               # 一键构建桌面 .exe 脚本
+├── docker-compose.yml             # Docker 一键部署
+└── 文档/                          # 项目规划与样例数据
 ```
 
 ## 快速开始
@@ -65,7 +66,27 @@ npm run dev                       # → http://localhost:5173
 
 打开 `http://localhost:5173` 即可测试完整流程。
 
-### 方式二：Docker 一键部署
+### 方式二：桌面应用（推荐非技术用户）
+
+**前置条件**：Python 3.11+、Node.js 18+
+
+```bash
+# 一键构建
+python build_desktop.py
+
+# 产出: dist/DocAI-Pipeline.exe
+# 双击运行，浏览器自动打开，系统托盘显示图标
+# 首次运行会自动弹出设置面板，请填入 OpenAI API Key
+```
+
+也可以直接用启动器脚本运行（不打包）：
+
+```bash
+cd ai-service
+python launcher.py               # → http://127.0.0.1:8000
+```
+
+### 方式三：Docker 一键部署
 
 ```bash
 # 创建 .env 文件
@@ -98,7 +119,7 @@ docker compose up --build
 - **AI 后端**：Python, FastAPI, OpenCV, PyMuPDF, Ultralytics YOLO, OpenAI VLM (gpt-4.1-mini)
 - **Excel 引擎**：openpyxl（保留公式、格式与数据透视表）
 - **Web 前端**：React 19, TypeScript, Vite, TailwindCSS v4, Lucide Icons
-- **部署**：Docker Compose（Nginx 反代 + Python 后端）
+- **部署**：Docker Compose / PyInstaller 桌面 .exe / 本地开发
 
 ## 许可证
 

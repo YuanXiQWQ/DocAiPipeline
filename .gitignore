@@ -5,3 +5,13 @@
 
 # 用户本地配置（含 API Key）
 ai-service/user_settings.json
+
+# PyInstaller 构建产物
+ai-service/build/
+ai-service/dist/
+ai-service/web_dist/
+dist/
+*.spec.bak
+
+# 前端构建产物
+web/dist/
