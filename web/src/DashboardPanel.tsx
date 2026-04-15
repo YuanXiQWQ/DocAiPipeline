@@ -629,8 +629,10 @@ export default function DashboardPanel() {
                     <div>
                         <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">{t("dashboard.overview")}</h3>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <StatCard icon={<BarChart3 className="w-5 h-5 text-blue-500"/>} label={t("dashboard.docs_processed")} value={data.total_documents_processed} unit={t("dashboard.unit_doc")} color="bg-blue-50 border-blue-200"/>
-                            <StatCard icon={<BarChart3 className="w-5 h-5 text-indigo-500"/>} label={t("dashboard.pages_processed")} value={data.total_pages_processed} unit={t("dashboard.unit_page")} color="bg-indigo-50 border-indigo-200"/>
+                            <StatCard icon={<BarChart3 className="w-5 h-5 text-blue-500"/>} label={t("dashboard.docs_processed")} value={data.total_documents_processed} unit={t("dashboard.unit_doc")} color="bg-blue-50 border-blue-200"
+                                      onClick={() => openDetail(t("dashboard.docs_processed"), "", "", "")}/>
+                            <StatCard icon={<BarChart3 className="w-5 h-5 text-indigo-500"/>} label={t("dashboard.pages_processed")} value={data.total_pages_processed} unit={t("dashboard.unit_page")} color="bg-indigo-50 border-indigo-200"
+                                      onClick={() => openDetail(t("dashboard.pages_processed"), "", "", "")}/>
                             <StatCard icon={<ArrowDownCircle className="w-5 h-5 text-emerald-500"/>} label={t("dashboard.log_inbound")} value={cv(data.log_summary.total_inbound_m3, "m3").value} unit={cv(data.log_summary.total_inbound_m3, "m3").unit} color="bg-emerald-50 border-emerald-200"
                                       onClick={() => openDetail(t("dashboard.inbound_volume"), "log_inbound", "inbound_batch", "m3")}/>
                             <StatCard icon={<ArrowUpCircle className="w-5 h-5 text-amber-500"/>} label={t("dashboard.log_outbound")} value={cv(data.log_summary.total_outbound_m3, "m3").value} unit={cv(data.log_summary.total_outbound_m3, "m3").unit} color="bg-amber-50 border-amber-200"
@@ -644,11 +646,14 @@ export default function DashboardPanel() {
                             <Truck className="w-4 h-4"/> {t("dashboard.import")}
                         </h3>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.batches")} value={data.import_summary.total_batches} color="bg-sky-50 border-sky-200"/>
-                            <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.invoices")} value={data.import_summary.total_invoices} color="bg-sky-50 border-sky-200"/>
+                            <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.batches")} value={data.import_summary.total_batches} color="bg-sky-50 border-sky-200"
+                                      onClick={() => openDetail(t("dashboard.batches"), "import", "", "")}/>
+                            <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.invoices")} value={data.import_summary.total_invoices} color="bg-sky-50 border-sky-200"
+                                      onClick={() => openDetail(t("dashboard.invoices"), "import", "customs_record", "EUR")}/>
                             <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.total_amount")} value={cv(data.import_summary.total_amount_eur, "EUR").value} unit={cv(data.import_summary.total_amount_eur, "EUR").unit} color="bg-sky-50 border-sky-200"
                                       onClick={() => openDetail(t("dashboard.total_amount"), "import", "customs_record", "EUR")}/>
-                            <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.total_volume")} value={cv(data.import_summary.total_volume_m3, "m3").value} unit={cv(data.import_summary.total_volume_m3, "m3").unit} color="bg-sky-50 border-sky-200"/>
+                            <StatCard icon={<Truck className="w-5 h-5 text-sky-500"/>} label={t("dashboard.total_volume")} value={cv(data.import_summary.total_volume_m3, "m3").value} unit={cv(data.import_summary.total_volume_m3, "m3").unit} color="bg-sky-50 border-sky-200"
+                                      onClick={() => openDetail(t("dashboard.total_volume"), "import", "customs_record", "EUR")}/>
                         </div>
                         {Object.keys(data.import_summary.suppliers).length > 0 && (
                             <div className="mt-3 flex flex-wrap gap-2">
