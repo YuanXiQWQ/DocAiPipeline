@@ -156,11 +156,7 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
     };
 
     const toggleHistory = (id: string) => {
-        setExpandedHistory(prev => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id); else next.add(id);
-            return next;
-        });
+        setExpandedHistory(prev => prev.has(id) ? new Set() : new Set([id]));
     };
 
     return (
