@@ -248,3 +248,105 @@ export async function checkUpdate(): Promise<VersionInfo> {
     const {data} = await api.get<VersionInfo>("/api/version");
     return data;
 }
+
+/* 批量处理 SSE 事件类型 */
+export interface BatchProgressEvent {
+    index: number;
+    total: number;
+    filename: string;
+    status: "processing";
+}
+
+export interface BatchResultEvent {
+    index: number;
+    filename: string;
+    data: ProcessResult;
+}
+
+export interface BatchErrorEvent {
+    index: number;
+    filename: string;
+    error: string;
+}
+
+export interface BatchDoneEvent {
+    total: number;
+    success: number;
+    failed: number;
+}
+
+/**
+ * 批量处理文件，通过 SSE 推送进度。
+ * 返回一个 abort 函数用于取消。
+ */
+export function processBatch(
+    files: File[],
+    docType: string,
+    callbacks: {
+        onProgress?: (e: BatchProgressEvent) => void;
+        onResult?: (e: BatchResultEvent) => void;
+        onError?: (e: BatchErrorEvent) => void;
+        onDone?: (e: BatchDoneEvent) => void;
+    },
+): { abort: () => void } {
+    const controller = new AbortController();
+    const fd = new FormData();
+    for (const f of files) {
+        fd.append("files", f);
+    }
+    fd.append("doc_type", docType);
+
+    (async () => {
+        try {
+            const response = await fetch("/api/process-batch", {
+                method: "POST",
+                body: fd,
+                signal: controller.signal,
+            });
+            if (!response.ok || !response.body) {
+                const text = await response.text();
+                callbacks.onError?.({index: 0, filename: "", error: text});
+                return;
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+
+            while (true) {
+                const {done, value} = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, {stream: true});
+
+                const lines = buffer.split("\n");
+                buffer = lines.pop() ?? "";
+
+                let currentEvent = "";
+                let currentData = "";
+                for (const line of lines) {
+                    if (line.startsWith("event:")) {
+                        currentEvent = line.slice(6).trim();
+                    } else if (line.startsWith("data:")) {
+                        currentData = line.slice(5).trim();
+                    } else if (line === "" && currentEvent && currentData) {
+                        try {
+                            const parsed = JSON.parse(currentData);
+                            if (currentEvent === "progress") callbacks.onProgress?.(parsed);
+                            else if (currentEvent === "result") callbacks.onResult?.(parsed);
+                            else if (currentEvent === "error") callbacks.onError?.(parsed);
+                            else if (currentEvent === "done") callbacks.onDone?.(parsed);
+                        } catch { /* 忽略解析错误 */ }
+                        currentEvent = "";
+                        currentData = "";
+                    }
+                }
+            }
+        } catch (err) {
+            if ((err as Error).name !== "AbortError") {
+                callbacks.onError?.({index: 0, filename: "", error: String(err)});
+            }
+        }
+    })();
+
+    return {abort: () => controller.abort()};
+}

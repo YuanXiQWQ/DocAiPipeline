@@ -25,6 +25,7 @@ import DashboardPanel from "./DashboardPanel";
 import {
     classifyDocument,
     processDocument,
+    processBatch,
     fillExcel,
     healthCheck,
     getSettings,
@@ -33,6 +34,9 @@ import {
     type ClassifyResult,
     type ProcessResult,
     type FillResult,
+    type BatchProgressEvent,
+    type BatchResultEvent,
+    type BatchErrorEvent,
 } from "./api";
 
 /* 文档类型图标映射 */
@@ -47,14 +51,24 @@ const DOC_ICONS: Record<string, React.ReactNode> = {
 
 type Step = "upload" | "processing" | "review" | "filling" | "done";
 
+/* 每个文件的处理状态 */
+type FileStatus = "waiting" | "processing" | "success" | "error";
+interface FileEntry {
+    file: File;
+    status: FileStatus;
+    error?: string;
+    result?: ProcessResult;
+}
+
 export default function App() {
     const t = useT();
     const location = useLocation();
     const navigate = useNavigate();
     const [step, setStep] = useState<Step>("upload");
-    const [file, setFile] = useState<File | null>(null);
+    const [files, setFiles] = useState<FileEntry[]>([]);
     const [docType, setDocType] = useState("auto");
     const [result, setResult] = useState<ProcessResult | null>(null);
+    const [batchResults, setBatchResults] = useState<ProcessResult[]>([]);
     const [fillResult, setFillResult] = useState<FillResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [templateFile, setTemplateFile] = useState<File | null>(null);
@@ -64,6 +78,7 @@ export default function App() {
     const [dragging, setDragging] = useState(false);
     const [preview, setPreview] = useState<string | null>(null);
     const [needsSetup, setNeedsSetup] = useState(false);
+    const batchAbortRef = useRef<{abort: () => void} | null>(null);
 
     useEffect(() => {
         healthCheck()
@@ -80,49 +95,100 @@ export default function App() {
             .catch(() => setBackendOk(false));
     }, []);
 
-    const selectFile = useCallback((f: File) => {
-        setFile(f);
-        if (f.type.startsWith("image/")) {
-            setPreview(URL.createObjectURL(f));
-        } else {
-            setPreview(null);
+    const addFiles = useCallback((newFiles: FileList | File[]) => {
+        const arr = Array.from(newFiles);
+        setFiles(prev => [
+            ...prev,
+            ...arr.map(f => ({file: f, status: "waiting" as FileStatus})),
+        ]);
+        // 预览第一张图片
+        const first = arr[0];
+        if (first && first.type.startsWith("image/")) {
+            setPreview(URL.createObjectURL(first));
         }
+    }, []);
+
+    const removeFile = useCallback((index: number) => {
+        setFiles(prev => prev.filter((_, i) => i !== index));
     }, []);
 
     const handleFileSelect = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) => {
-            const f = e.target.files?.[0];
-            if (f) selectFile(f);
+            if (e.target.files?.length) addFiles(e.target.files);
         },
-        [selectFile]
+        [addFiles]
     );
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
         setDragging(false);
-        const f = e.dataTransfer.files[0];
-        if (f) selectFile(f);
-    }, [selectFile]);
+        if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+    }, [addFiles]);
 
-    const handleProcess = useCallback(async () => {
-        if (!file) return;
+    const handleProcess = useCallback(() => {
+        if (files.length === 0) return;
         setStep("processing");
         setError(null);
         setClassifyInfo(null);
-        try {
-            // 自动模式下先调分类接口，显示分类结果
-            if (docType === "auto") {
-                const cls = await classifyDocument(file);
-                setClassifyInfo(cls);
-            }
-            const res = await processDocument(file, docType);
-            setResult(res);
-            setStep("review");
-        } catch (err: unknown) {
-            setError(extractErrorMessage(err));
-            setStep("upload");
+        setBatchResults([]);
+
+        // 所有文件置为 waiting
+        setFiles(prev => prev.map(f => ({...f, status: "waiting" as FileStatus, error: undefined, result: undefined})));
+
+        const rawFiles = files.map(f => f.file);
+
+        // 单文件走原有路径（兼容）
+        if (rawFiles.length === 1) {
+            (async () => {
+                setFiles(prev => prev.map((f, i) => i === 0 ? {...f, status: "processing"} : f));
+                try {
+                    if (docType === "auto") {
+                        const cls = await classifyDocument(rawFiles[0]);
+                        setClassifyInfo(cls);
+                    }
+                    const res = await processDocument(rawFiles[0], docType);
+                    setResult(res);
+                    setBatchResults([res]);
+                    setFiles(prev => prev.map((f, i) => i === 0 ? {...f, status: "success", result: res} : f));
+                    setStep("review");
+                } catch (err: unknown) {
+                    setError(extractErrorMessage(err));
+                    setFiles(prev => prev.map((f, i) => i === 0 ? {...f, status: "error", error: extractErrorMessage(err)} : f));
+                    setStep("upload");
+                }
+            })();
+            return;
         }
-    }, [file, docType]);
+
+        // 多文件走 SSE 批量处理
+        const handle = processBatch(rawFiles, docType, {
+            onProgress: (e: BatchProgressEvent) => {
+                setFiles(prev => prev.map((f, i) => i === e.index ? {...f, status: "processing"} : f));
+            },
+            onResult: (e: BatchResultEvent) => {
+                setFiles(prev => prev.map((f, i) => i === e.index ? {...f, status: "success", result: e.data} : f));
+                setBatchResults(prev => [...prev, e.data]);
+            },
+            onError: (e: BatchErrorEvent) => {
+                setFiles(prev => prev.map((f, i) => i === e.index ? {...f, status: "error", error: e.error} : f));
+            },
+            onDone: () => {
+                // 批量完成后进入复核，展示第一个成功结果
+                setFiles(prev => {
+                    const firstSuccess = prev.find(f => f.status === "success" && f.result);
+                    if (firstSuccess?.result) {
+                        setResult(firstSuccess.result);
+                        setStep("review");
+                    } else {
+                        setError(prev.filter(f => f.status === "error").map(f => f.error).join("; "));
+                        setStep("upload");
+                    }
+                    return prev;
+                });
+            },
+        });
+        batchAbortRef.current = handle;
+    }, [files, docType]);
 
     const handleFill = useCallback(async () => {
         if (!result) return;
@@ -143,9 +209,12 @@ export default function App() {
     }, [result, templateFile]);
 
     const handleReset = useCallback(() => {
+        batchAbortRef.current?.abort();
+        batchAbortRef.current = null;
         setStep("upload");
-        setFile(null);
+        setFiles([]);
         setResult(null);
+        setBatchResults([]);
         setFillResult(null);
         setError(null);
         setTemplateFile(null);
@@ -237,12 +306,13 @@ export default function App() {
                             t={t}
                             step={step}
                             setStep={setStep}
-                            file={file}
-                            setFile={setFile}
+                            files={files}
+                            removeFile={removeFile}
                             docType={docType}
                             setDocType={setDocType}
                             result={result}
                             setResult={setResult}
+                            batchResults={batchResults}
                             fillResult={fillResult}
                             setFillResult={setFillResult}
                             error={error}
@@ -257,7 +327,6 @@ export default function App() {
                             preview={preview}
                             setPreview={setPreview}
                             needsSetup={needsSetup}
-                            selectFile={selectFile}
                             handleFileSelect={handleFileSelect}
                             handleDrop={handleDrop}
                             handleProcess={handleProcess}
@@ -278,22 +347,23 @@ export default function App() {
 
 /* 文档处理流程组件（首页） */
 function ProcessingFlow({
-    t, step, setStep, file, setFile, docType, setDocType,
-    result, setResult, fillResult, setFillResult, error, setError,
-    templateFile, setTemplateFile, classifyInfo, setClassifyInfo,
-    inputRef, dragging, setDragging, preview, setPreview,
-    needsSetup, selectFile, handleFileSelect, handleDrop,
+    t, step, files, removeFile, docType, setDocType,
+    result, batchResults, fillResult, error,
+    templateFile, setTemplateFile, classifyInfo,
+    inputRef, dragging, setDragging, preview,
+    needsSetup, handleFileSelect, handleDrop,
     handleProcess, handleFill, handleReset,
 }: {
     t: (key: string) => string;
     step: Step;
     setStep: (s: Step) => void;
-    file: File | null;
-    setFile: (f: File | null) => void;
+    files: FileEntry[];
+    removeFile: (index: number) => void;
     docType: string;
     setDocType: (d: string) => void;
     result: ProcessResult | null;
     setResult: (r: ProcessResult | null) => void;
+    batchResults: ProcessResult[];
     fillResult: FillResult | null;
     setFillResult: (r: FillResult | null) => void;
     error: string | null;
@@ -308,13 +378,25 @@ function ProcessingFlow({
     preview: string | null;
     setPreview: (p: string | null) => void;
     needsSetup: boolean;
-    selectFile: (f: File) => void;
     handleFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleDrop: (e: React.DragEvent) => void;
     handleProcess: () => void;
     handleFill: () => void;
     handleReset: () => void;
 }) {
+    const statusColor: Record<FileStatus, string> = {
+        waiting: "bg-slate-200",
+        processing: "bg-blue-500 animate-pulse",
+        success: "bg-emerald-500",
+        error: "bg-red-500",
+    };
+    const statusLabel: Record<FileStatus, string> = {
+        waiting: t("upload.file_waiting"),
+        processing: t("upload.file_processing"),
+        success: t("upload.file_success"),
+        error: t("upload.file_error"),
+    };
+
     return (
         <>
             {/* 首次运行引导横幅 */}
@@ -441,6 +523,7 @@ function ProcessingFlow({
                             ref={inputRef}
                             type="file"
                             accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif"
+                            multiple
                             className="hidden"
                             onChange={handleFileSelect}
                         />
@@ -454,19 +537,13 @@ function ProcessingFlow({
                         </p>
                     </div>
 
-                    {/* 已选文件 */}
-                    {file && (
-                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <FileText className="w-8 h-8 text-blue-500"/>
-                                    <div>
-                                        <p className="font-medium text-slate-800">{file.name}</p>
-                                        <p className="text-sm text-slate-400">
-                                            {(file.size / 1024).toFixed(1)} KB
-                                        </p>
-                                    </div>
-                                </div>
+                    {/* 已选文件列表 */}
+                    {files.length > 0 && (
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-3">
+                            <div className="flex items-center justify-between mb-2">
+                                <p className="text-sm font-medium text-slate-600">
+                                    {t("upload.files_selected").replace("{n}", String(files.length))}
+                                </p>
                                 <button
                                     onClick={handleProcess}
                                     className="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
@@ -475,14 +552,26 @@ function ProcessingFlow({
                                     {t("upload.start")}
                                 </button>
                             </div>
+                            {files.map((entry, idx) => (
+                                <div key={idx} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50">
+                                    <FileText className="w-6 h-6 text-blue-500 shrink-0"/>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-slate-800 truncate">{entry.file.name}</p>
+                                        <p className="text-xs text-slate-400">{(entry.file.size / 1024).toFixed(1)} KB</p>
+                                    </div>
+                                    <button
+                                        onClick={() => removeFile(idx)}
+                                        className="text-slate-400 hover:text-red-500 transition-colors text-lg leading-none px-1"
+                                        title="Remove"
+                                    >
+                                        &times;
+                                    </button>
+                                </div>
+                            ))}
                             {/* 图片预览 */}
                             {preview && (
-                                <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden">
-                                    <img
-                                        src={preview}
-                                        alt="预览"
-                                        className="max-h-64 mx-auto object-contain"
-                                    />
+                                <div className="mt-2 border border-slate-200 rounded-xl overflow-hidden">
+                                    <img src={preview} alt="预览" className="max-h-64 mx-auto object-contain"/>
                                 </div>
                             )}
                         </div>
@@ -490,16 +579,42 @@ function ProcessingFlow({
                 </div>
             )}
 
-            {/* ===== 步骤 2: 处理中 ===== */}
+            {/* ===== 步骤 2: 处理中（含每文件进度条） ===== */}
             {(step === "processing" || step === "filling") && (
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-16 text-center">
-                    <Loader2 className="w-12 h-12 text-blue-500 mx-auto mb-4 animate-spin"/>
-                    <p className="text-lg text-slate-700 font-medium">
-                        {step === "processing" ? t("processing.recognizing") : t("processing.filling")}
-                    </p>
-                    <p className="text-sm text-slate-400 mt-2">
-                        {t("processing.hint")}
-                    </p>
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 space-y-6">
+                    <div className="text-center">
+                        <Loader2 className="w-10 h-10 text-blue-500 mx-auto mb-3 animate-spin"/>
+                        <p className="text-lg text-slate-700 font-medium">
+                            {step === "processing" ? t("processing.recognizing") : t("processing.filling")}
+                        </p>
+                        <p className="text-sm text-slate-400 mt-1">
+                            {t("processing.hint")}
+                        </p>
+                    </div>
+                    {/* 每文件进度 */}
+                    {files.length > 1 && (
+                        <div className="space-y-2 max-h-80 overflow-auto">
+                            {files.map((entry, idx) => (
+                                <div key={idx} className="flex items-center gap-3 p-2 rounded-lg bg-slate-50">
+                                    <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${statusColor[entry.status]}`}/>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm text-slate-700 truncate">{entry.file.name}</p>
+                                    </div>
+                                    <span className={`text-xs font-medium ${
+                                        entry.status === "success" ? "text-emerald-600" :
+                                        entry.status === "error" ? "text-red-600" :
+                                        entry.status === "processing" ? "text-blue-600" :
+                                        "text-slate-400"
+                                    }`}>
+                                        {entry.status === "error" && entry.error
+                                            ? entry.error.slice(0, 40)
+                                            : statusLabel[entry.status]
+                                        }
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
 

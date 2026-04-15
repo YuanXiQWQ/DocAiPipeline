@@ -12,19 +12,22 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import shutil
 import uuid
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncGenerator
 
 import cv2
 import fitz
 import numpy as np
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
+from sse_starlette.sse import EventSourceResponse
 
 from app.config import settings
 from app.extraction import FactoryExtractor, LogExtractor
@@ -340,6 +343,170 @@ async def process_document(
         results=results,
         warnings=warnings,
     )
+
+
+def _process_single_file(
+    save_path: Path,
+    filename: str,
+    doc_type_str: str,
+    images: list[np.ndarray],
+) -> ProcessResponse:
+    """处理单个文件的核心逻辑（同步），返回 ProcessResponse。"""
+    actual_type = doc_type_str
+    if actual_type == "auto":
+        classify_result = _classify_document(images[0])
+        actual_type = classify_result.doc_type
+        logger.info(f"自动分类: {filename} → {actual_type} ({classify_result.confidence})")
+
+    warnings: list[str] = []
+    results: list[Any] = []
+
+    if actual_type == "customs":
+        pipeline = _get_pipeline()
+        pipeline_result = pipeline.process(save_path)
+        results = [r.model_dump() for r in pipeline_result.records]
+        warnings = pipeline_result.warnings
+        for i, img in enumerate(images):
+            crop_path = _save_crop(img, filename, i + 1)
+            if i < len(results):
+                results[i]["crop_image_path"] = crop_path
+
+    elif actual_type == "log_measurement":
+        extractor = _get_log_extractor()
+        for i, img in enumerate(images):
+            crop_path = _save_crop(img, filename, i + 1)
+            r = extractor.extract_page(img, filename=filename, page=i + 1)
+            data = r.model_dump()
+            data["crop_image_path"] = crop_path
+            results.append(data)
+
+    elif actual_type in ("log_output", "soak_pool", "slicing", "packing"):
+        extractor = _get_factory_extractor()
+        for i, img in enumerate(images):
+            crop_path = _save_crop(img, filename, i + 1)
+            r = extractor.extract(img, doc_type=actual_type, filename=filename, page=i + 1)
+            data = r.model_dump()
+            data["crop_image_path"] = crop_path
+            results.append(data)
+
+    else:
+        raise ValueError(f"不支持的文档类型: {actual_type}")
+
+    # 保存历史
+    try:
+        history.save_record(
+            doc_type=actual_type,
+            filename=filename,
+            pages=len(images),
+            results=results,
+            warnings=warnings,
+        )
+    except Exception as e:
+        logger.warning(f"保存历史记录失败: {e}")
+
+    return ProcessResponse(
+        doc_type=actual_type,
+        filename=filename,
+        pages=len(images),
+        results=results,
+        warnings=warnings,
+    )
+
+
+# ------------------------------------------------------------------
+# 批量处理 + SSE 进度推送
+# ------------------------------------------------------------------
+
+
+@router.post("/process-batch")
+async def process_batch(
+    request: Request,
+    files: list[UploadFile] = File(...),
+    doc_type: DocType = Form(DocType.AUTO),
+):
+    """批量处理多个文件，通过 SSE 推送每个文件的处理进度。
+
+    SSE 事件类型：
+    - progress: {"index": 0, "total": 3, "filename": "a.pdf", "status": "processing"}
+    - result:   {"index": 0, "filename": "a.pdf", "data": {...ProcessResponse}}
+    - error:    {"index": 0, "filename": "a.pdf", "error": "..."}
+    - done:     {"total": 3, "success": 2, "failed": 1}
+    """
+    # 预先保存所有上传文件
+    saved_files: list[tuple[Path, str]] = []
+    for f in files:
+        path = _save_upload(f)
+        saved_files.append((path, f.filename or path.name))
+
+    total = len(saved_files)
+    doc_type_str = doc_type.value
+
+    async def event_generator() -> AsyncGenerator[dict, None]:
+        success_count = 0
+        for idx, (save_path, filename) in enumerate(saved_files):
+            # 检查客户端是否断开
+            if await request.is_disconnected():
+                return
+
+            # 发送开始处理事件
+            yield {
+                "event": "progress",
+                "data": json.dumps({
+                    "index": idx,
+                    "total": total,
+                    "filename": filename,
+                    "status": "processing",
+                }),
+            }
+
+            try:
+                images = _file_to_images(save_path)
+                if not images:
+                    raise ValueError("无法解析文件")
+
+                # 在线程池中执行同步处理
+                loop = asyncio.get_event_loop()
+                resp = await loop.run_in_executor(
+                    None,
+                    _process_single_file,
+                    save_path,
+                    filename,
+                    doc_type_str,
+                    images,
+                )
+
+                yield {
+                    "event": "result",
+                    "data": json.dumps({
+                        "index": idx,
+                        "filename": filename,
+                        "data": resp.model_dump(),
+                    }),
+                }
+                success_count += 1
+
+            except Exception as e:
+                logger.error(f"批量处理失败: {filename}: {e}")
+                yield {
+                    "event": "error",
+                    "data": json.dumps({
+                        "index": idx,
+                        "filename": filename,
+                        "error": str(e),
+                    }),
+                }
+
+        # 发送完成事件
+        yield {
+            "event": "done",
+            "data": json.dumps({
+                "total": total,
+                "success": success_count,
+                "failed": total - success_count,
+            }),
+        }
+
+    return EventSourceResponse(event_generator())
 
 
 @router.get("/crop/{filename}")
