@@ -5,18 +5,14 @@
 
 from __future__ import annotations
 
-import json
 import time
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query
 from loguru import logger
 from pydantic import BaseModel
-
-from app.config import settings
 from app.summary_store import (
     SummaryEntry,
     EntryRevision,
@@ -79,54 +75,72 @@ class OverallSummary(BaseModel):
 # ------------------------------------------------------------------
 
 
-def _aggregate_from_history(*, date_from: str = "", date_to: str = "") -> OverallSummary:
-    """从历史记录 JSON 文件中聚合统计数据，支持日期范围过滤。"""
-    hdir = Path(settings.output_dir) / "history"
-    if not hdir.exists():
-        return OverallSummary(
-            import_summary=ImportSummary(),
-            log_summary=LogSummary(),
-            factory_summary=FactorySummary(),
-        )
+def _aggregate_from_db(*, date_from: str = "", date_to: str = "") -> OverallSummary:
+    """从 SQLite summary_entries + history_records 聚合卡片数据。
+
+    与 DetailView 使用同一数据源（summary_entries），确保卡片与详情数字一致。
+    """
+    from app.db import get_conn
+
+    conn = get_conn()
+
+    # --- 从 summary_entries 聚合（仅未删除的） ---
+    entries = query_entries(
+        date_from=date_from,
+        date_to=date_to,
+        include_deleted=False,
+    )
 
     imp = ImportSummary()
     log = LogSummary()
     fac = FactorySummary()
-    total_docs = 0
-    total_pages = 0
 
-    for f in hdir.glob("*.json"):
-        try:
-            data = json.loads(f.read_text("utf-8"))
-        except (json.JSONDecodeError, OSError):
-            continue
+    for e in entries:
+        detail = e.detail or {}
+        if e.category == "import":
+            imp.total_invoices += 1
+            imp.total_amount_eur += e.value
+            imp.total_volume_m3 += float(detail.get("volume_m3", 0))
+            supplier = str(detail.get("importer", "") or detail.get("exporter", "")).strip()[:30]
+            if supplier:
+                imp.suppliers[supplier] = imp.suppliers.get(supplier, 0) + 1
+        elif e.category == "log_inbound":
+            log.total_inbound_m3 += e.value
+            log.total_inbound_logs += int(detail.get("log_count", 0))
+            log.batches += 1
+        elif e.category == "log_outbound":
+            log.total_outbound_m3 += e.value
+            log.total_outbound_logs += int(detail.get("log_count", 0))
+        elif e.category == "soak_pool":
+            fac.soak_pool_logs += int(e.value)
+            fac.soak_pool_m3 += float(detail.get("volume_m3", 0))
+        elif e.category == "slicing":
+            fac.slicing_logs += int(e.value)
+            fac.slicing_output_m2 += float(detail.get("output_m2", 0))
+        elif e.category == "packing":
+            fac.packing_packages += int(e.value)
+            fac.packing_pieces += int(detail.get("pieces", 0))
+            fac.packing_area_m2 += float(detail.get("area_m2", 0))
 
-        # 日期过滤：取 timestamp 的日期部分
-        ts_str = data.get("timestamp", "")
-        if ts_str:
-            record_date = ts_str[:10]  # "2026-04-15T..." → "2026-04-15"
-            if date_from and record_date < date_from:
-                continue
-            if date_to and record_date > date_to:
-                continue
+    imp.total_batches = imp.total_invoices  # 每条 entry 对应一票
 
-        doc_type = data.get("doc_type", "")
-        results = data.get("results", [])
-        total_docs += 1
-        total_pages += data.get("pages", 0)
+    # --- 从 history_records 取文档/页数统计 ---
+    clauses: list[str] = []
+    params: list[Any] = []
+    if date_from:
+        clauses.append("timestamp>=?")
+        params.append(date_from)
+    if date_to:
+        clauses.append("timestamp<=?")
+        params.append(date_to + "T99")  # 包含当天
+    where = " AND ".join(clauses) if clauses else "1"
 
-        if doc_type == "customs":
-            _agg_customs(imp, results)
-        elif doc_type == "log_measurement":
-            _agg_log_inbound(log, results)
-        elif doc_type == "log_output":
-            _agg_log_outbound(log, results)
-        elif doc_type == "soak_pool":
-            _agg_soak_pool(fac, results)
-        elif doc_type == "slicing":
-            _agg_slicing(fac, results)
-        elif doc_type == "packing":
-            _agg_packing(fac, results)
+    row = conn.execute(
+        f"SELECT COUNT(*) as cnt, COALESCE(SUM(pages),0) as pg FROM history_records WHERE {where}",
+        params,
+    ).fetchone()
+    total_docs = row["cnt"]
+    total_pages = row["pg"]
 
     return OverallSummary(
         import_summary=imp,
@@ -135,109 +149,6 @@ def _aggregate_from_history(*, date_from: str = "", date_to: str = "") -> Overal
         total_documents_processed=total_docs,
         total_pages_processed=total_pages,
     )
-
-
-def _safe_float(val: Any) -> float:
-    """安全转换为浮点数。"""
-    if val is None:
-        return 0.0
-    try:
-        return float(val)
-    except (ValueError, TypeError):
-        return 0.0
-
-
-def _agg_customs(imp: ImportSummary, results: list[dict]) -> None:
-    """聚合进口单据数据。"""
-    imp.total_invoices += len(results)
-    imp.total_batches += 1
-    for r in results:
-        fields = {f["field_name"]: f["value"] for f in r.get("fields", [])}
-        # 尝试提取金额
-        for fname in ("total_amount", "invoice_total", "amount", "ukupno"):
-            if fname in fields:
-                imp.total_amount_eur += _safe_float(
-                    fields[fname].replace(",", ".").replace(" ", "")
-                )
-                break
-        # 尝试提取体积
-        for fname in ("volume_m3", "quantity_m3", "masa_neto"):
-            if fname in fields:
-                imp.total_volume_m3 += _safe_float(
-                    fields[fname].replace(",", ".").replace(" ", "")
-                )
-                break
-        # 供应商
-        for fname in ("supplier", "sender", "pošiljalac"):
-            if fname in fields and fields[fname]:
-                name = fields[fname].strip()[:30]
-                imp.suppliers[name] = imp.suppliers.get(name, 0) + 1
-                break
-
-
-def _agg_log_inbound(log: LogSummary, results: list[dict]) -> None:
-    """聚合原木入库（检尺单）数据。"""
-    log.batches += len(results)
-    for page in results:
-        entries = page.get("entries", [])
-        log.total_inbound_logs += len(entries)
-        meta = page.get("meta", {})
-        vol = _safe_float(meta.get("total_volume_m3"))
-        if vol > 0:
-            log.total_inbound_m3 += vol
-        else:
-            # 逐行累加
-            for e in entries:
-                log.total_inbound_m3 += _safe_float(e.get("volume_m3"))
-
-
-def _agg_log_outbound(log: LogSummary, results: list[dict]) -> None:
-    """聚合原木出库数据。"""
-    for page in results:
-        entries = page.get("entries", [])
-        log.total_outbound_logs += len(entries)
-        meta = page.get("meta", {})
-        vol = _safe_float(meta.get("total_volume_m3"))
-        if vol > 0:
-            log.total_outbound_m3 += vol
-
-
-def _agg_soak_pool(fac: FactorySummary, results: list[dict]) -> None:
-    """聚合入池数据。"""
-    for page in results:
-        entries = page.get("entries", [])
-        fac.soak_pool_logs += len(entries)
-        for e in entries:
-            l_mm = _safe_float(e.get("length_mm"))
-            w_mm = _safe_float(e.get("width_mm"))
-            t_mm = _safe_float(e.get("thickness_mm"))
-            if l_mm > 0 and w_mm > 0 and t_mm > 0:
-                fac.soak_pool_m3 += l_mm * w_mm * t_mm / 1e9
-
-
-def _agg_slicing(fac: FactorySummary, results: list[dict]) -> None:
-    """聚合上机数据。"""
-    for page in results:
-        entries = page.get("entries", [])
-        fac.slicing_logs += len(entries)
-        meta = page.get("meta", {})
-        output = _safe_float(meta.get("total_output_m2"))
-        if output > 0:
-            fac.slicing_output_m2 += output
-
-
-def _agg_packing(fac: FactorySummary, results: list[dict]) -> None:
-    """聚合打包数据。"""
-    package_ids = set()
-    for page in results:
-        entries = page.get("entries", [])
-        for e in entries:
-            fac.packing_pieces += max(0, int(_safe_float(e.get("piece_count"))))
-            fac.packing_area_m2 += _safe_float(e.get("area_m2"))
-            pid = e.get("package_id", "")
-            if pid:
-                package_ids.add(pid)
-    fac.packing_packages += len(package_ids)
 
 
 # ------------------------------------------------------------------
@@ -259,7 +170,7 @@ async def get_summary(
     """获取全局数据汇总概览（进销存），支持日期范围过滤。"""
     if not date_from and not date_to:
         date_from, date_to = _this_year_range()
-    return _aggregate_from_history(date_from=date_from, date_to=date_to)
+    return _aggregate_from_db(date_from=date_from, date_to=date_to)
 
 
 # ------------------------------------------------------------------
