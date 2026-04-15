@@ -197,8 +197,30 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
             {/* 明细表格 */}
             {loading ? (
                 <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-blue-500"/></div>
-            ) : entries.length === 0 ? (
+            ) : entries.length === 0 && !editing ? (
                 <p className="text-center text-gray-400 py-10">{t("dashboard.no_entries")}</p>
+            ) : entries.length === 0 && editing ? (
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    {addAfter === "__empty__" ? (
+                        <div className="flex items-center gap-2 px-4 py-3 bg-emerald-50">
+                            <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="border rounded px-2 py-1 text-xs w-36"/>
+                            <span className="text-xs text-amber-600">{t("dashboard.manual_entry")}</span>
+                            <input type="number" step="any" placeholder={t("dashboard.entry_value")} value={newValue} onChange={e => setNewValue(e.target.value)}
+                                   className="border rounded px-2 py-1 text-xs w-28 text-right"/>
+                            <input type="text" placeholder={t("dashboard.entry_note")} value={newNote} onChange={e => setNewNote(e.target.value)}
+                                   className="border rounded px-2 py-1 text-xs w-24"/>
+                            <button onClick={handleAddRow} className="p-1 text-emerald-600 hover:text-emerald-800"><Check className="w-4 h-4"/></button>
+                            <button onClick={() => setAddAfter(null)} className="p-1 text-gray-400 hover:text-red-500"><X className="w-4 h-4"/></button>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => setAddAfter("__empty__")}
+                            className="flex items-center justify-center gap-2 w-full px-4 py-4 text-sm text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition"
+                        >
+                            <Plus className="w-4 h-4"/> {t("dashboard.add_row")}
+                        </button>
+                    )}
+                </div>
             ) : (
                 <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                     <table className="min-w-full text-sm">
