@@ -64,7 +64,9 @@ class Pipeline:
                 crop_filename = f"{pdf_path.stem}_p{page_num + 1}_d{i + 1}.jpg"
                 crop_path = Path(settings.output_dir) / "crops" / crop_filename
                 crop_path.parent.mkdir(parents=True, exist_ok=True)
-                cv2.imwrite(str(crop_path), crop)
+                _ok, _buf = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                if _ok:
+                    crop_path.write_bytes(_buf.tobytes())
 
                 try:
                     fields = self.extractor.extract(crop)

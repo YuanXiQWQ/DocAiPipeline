@@ -131,7 +131,11 @@ def _save_crop(image: np.ndarray, filename: str, page: int) -> str:
     crop_dir = Path(settings.output_dir) / "crops"
     crop_dir.mkdir(parents=True, exist_ok=True)
     crop_path = crop_dir / crop_filename
-    cv2.imwrite(str(crop_path), image, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    # cv2.imwrite 在 Windows 上无法处理非 ASCII 路径（如中文文件名），
+    # 改用 imencode + write_bytes 绕过
+    success, buf = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    if success:
+        crop_path.write_bytes(buf.tobytes())
     return crop_filename
 
 
@@ -145,7 +149,9 @@ def _file_to_images(file_path: Path, dpi: int = 300, preprocess: bool = True) ->
     raw_images: list[np.ndarray] = []
 
     if suffix in (".jpg", ".jpeg", ".png", ".tiff", ".tif", ".bmp", ".webp"):
-        img = cv2.imread(str(file_path))
+        # cv2.imread 在 Windows 上无法处理非 ASCII 路径，改用 imdecode
+        raw_bytes = np.frombuffer(file_path.read_bytes(), dtype=np.uint8)
+        img = cv2.imdecode(raw_bytes, cv2.IMREAD_COLOR)
         if img is None:
             return []
         raw_images = [img]
