@@ -1,0 +1,87 @@
+# 当推送版本标签（如 1.0.0）时，自动构建桌面应用并创建 GitHub Release
+name: 构建桌面应用 & Release
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"        # 匹配 x.x.x 格式的标签
+
+permissions:
+  contents: write                       # 需要创建 Release 和上传附件
+
+jobs:
+  build:
+    name: 构建 Windows 桌面应用
+    runs-on: windows-latest
+
+    steps:
+      # ---- 检出代码 ----
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      # ---- 提取版本号 ----
+      - name: 提取版本号
+        id: version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "exe_name=DocAI-Pipeline-${VERSION}.exe" >> "$GITHUB_OUTPUT"
+
+      # ---- 安装 Node.js ----
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      # ---- 构建前端 ----
+      - name: 安装前端依赖
+        run: npm ci
+        working-directory: web
+
+      - name: 构建前端
+        run: npm run build
+        working-directory: web
+
+      # ---- 复制前端产物 ----
+      - name: 复制前端产物到 ai-service/web_dist
+        shell: bash
+        run: cp -r web/dist ai-service/web_dist
+
+      # ---- 安装 Python ----
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: ai-service/requirements.txt
+
+      # ---- 安装 Python 依赖 ----
+      - name: 安装 Python 依赖
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+        working-directory: ai-service
+
+      # ---- PyInstaller 打包 ----
+      - name: PyInstaller 打包
+        run: pyinstaller --clean --noconfirm docai.spec
+        working-directory: ai-service
+
+      # ---- 重命名产物（附带版本号） ----
+      - name: 重命名产物
+        shell: bash
+        run: |
+          mv ai-service/dist/DocAI-Pipeline.exe "ai-service/dist/${{ steps.version.outputs.exe_name }}"
+
+      # ---- 创建 GitHub Release ----
+      - name: 创建 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "DocAI Pipeline v${{ steps.version.outputs.version }}"
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            ai-service/dist/${{ steps.version.outputs.exe_name }}

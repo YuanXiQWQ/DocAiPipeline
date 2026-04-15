@@ -42,16 +42,16 @@ def _run(cmd: list[str], cwd: Path, label: str) -> None:
     print(f"  命令: {' '.join(cmd)}")
     print(f"  目录: {cwd}")
     print(f"{'='*60}\n")
-    result = subprocess.run(cmd, cwd=str(cwd))
+    result = subprocess.run(cmd, cwd=str(cwd), shell=True)
     if result.returncode != 0:
-        print(f"\n❌ {label} 失败（退出码 {result.returncode}）")
+        print(f"\n[X] {label} 失败（退出码 {result.returncode}）")
         sys.exit(result.returncode)
 
 
 def step_build_frontend() -> None:
     """步骤 1：构建前端。"""
     if not (WEB_DIR / "package.json").exists():
-        print("❌ 未找到 web/package.json，请确认项目结构完整")
+        print("[X] 未找到 web/package.json，请确认项目结构完整")
         sys.exit(1)
 
     # 安装依赖（如果 node_modules 不存在）
@@ -61,10 +61,10 @@ def step_build_frontend() -> None:
     _run(["npm", "run", "build"], WEB_DIR, "构建前端（vite build）")
 
     if not (WEB_DIST_SRC / "index.html").exists():
-        print("❌ 前端构建产物未生成（web/dist/index.html 不存在）")
+        print("[X] 前端构建产物未生成（web/dist/index.html 不存在）")
         sys.exit(1)
 
-    print("✅ 前端构建完成")
+    print("[OK] 前端构建完成")
 
 
 def step_copy_frontend() -> None:
@@ -72,13 +72,13 @@ def step_copy_frontend() -> None:
     if WEB_DIST_DST.exists():
         shutil.rmtree(WEB_DIST_DST)
     shutil.copytree(WEB_DIST_SRC, WEB_DIST_DST)
-    print(f"✅ 前端产物已复制到 {WEB_DIST_DST}")
+    print(f"[OK] 前端产物已复制到 {WEB_DIST_DST}")
 
 
 def step_pyinstaller() -> None:
     """步骤 3：PyInstaller 打包。"""
     if not SPEC_FILE.exists():
-        print(f"❌ 未找到 spec 文件: {SPEC_FILE}")
+        print(f"[X] 未找到 spec 文件: {SPEC_FILE}")
         sys.exit(1)
 
     _run(
@@ -89,7 +89,7 @@ def step_pyinstaller() -> None:
 
     exe_path = AI_DIR / "dist" / "DocAI-Pipeline.exe"
     if not exe_path.exists():
-        print("❌ 打包失败：未生成 .exe 文件")
+        print("[X] 打包失败：未生成 .exe 文件")
         sys.exit(1)
 
     # 移动到项目根目录 dist/
@@ -100,7 +100,7 @@ def step_pyinstaller() -> None:
     shutil.move(str(exe_path), str(final_path))
 
     print(f"\n{'='*60}")
-    print(f"  ✅ 构建完成！")
+    print(f"  [OK] 构建完成！")
     print(f"  输出文件: {final_path}")
     print(f"  文件大小: {final_path.stat().st_size / 1024 / 1024:.1f} MB")
     print(f"{'='*60}")
@@ -112,11 +112,11 @@ def step_cleanup() -> None:
         if d.exists():
             shutil.rmtree(d)
     # 保留 web_dist（spec 文件引用它）
-    print("✅ 临时文件已清理")
+    print("[OK] 临时文件已清理")
 
 
 def main() -> None:
-    print(f"🔨 DocAI Pipeline 桌面应用构建脚本")
+    print("[BUILD] DocAI Pipeline 桌面应用构建脚本")
     print(f"   项目根目录: {ROOT}\n")
 
     step_build_frontend()
