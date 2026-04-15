@@ -75,8 +75,11 @@ Open `http://localhost:5173` to test the full workflow.
 > automatically fall back to browser mode. For native window experience, use **Python 3.11 or 3.12**.
 
 ```bash
-# One-click build
-python build_desktop.py
+# One-click build (Windows, specify Python 3.12)
+py -3.12 build_desktop.py
+
+# Or if your default Python is already 3.11–3.12:
+# python build_desktop.py
 
 # Output: dist/DocAI-Pipeline.exe
 # Double-click to run, browser opens automatically, system tray icon appears

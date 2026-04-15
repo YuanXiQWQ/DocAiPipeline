@@ -119,7 +119,7 @@ def step_cleanup() -> None:
     print("[OK] 临时文件已清理")
 
 
-def _ensure_pkg(import_name: str, pip_name: str | None = None) -> bool:
+def _ensure_pkg(import_name: str, pip_name: str = "") -> bool:
     """确保指定包已安装，未安装则自动安装。返回是否可用。"""
     pip_name = pip_name or import_name
     try:

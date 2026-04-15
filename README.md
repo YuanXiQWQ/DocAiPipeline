@@ -74,8 +74,11 @@ npm run dev                       # → http://localhost:5173
 > 要获得原生窗口体验，请使用 **Python 3.11 或 3.12** 构建。
 
 ```bash
-# 一键构建
-python build_desktop.py
+# 一键构建（Windows，指定 Python 3.12）
+py -3.12 build_desktop.py
+
+# 如果系统默认 Python 已是 3.11–3.12，也可以直接：
+# python build_desktop.py
 
 # 产出: dist/DocAI-Pipeline.exe
 # 双击运行，浏览器自动打开，系统托盘显示图标
