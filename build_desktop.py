@@ -119,10 +119,34 @@ def step_cleanup() -> None:
     print("[OK] 临时文件已清理")
 
 
+def _ensure_pkg(import_name: str, pip_name: str | None = None) -> bool:
+    """确保指定包已安装，未安装则自动安装。返回是否可用。"""
+    pip_name = pip_name or import_name
+    try:
+        __import__(import_name)
+        return True
+    except ImportError:
+        print(f"   {pip_name}: 未安装，正在自动安装…")
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", pip_name],
+            capture_output=True,
+        )
+        if result.returncode == 0:
+            print(f"   {pip_name}: 安装完成")
+            return True
+        print(f"   {pip_name}: 安装失败（可忽略）")
+        return False
+
+
 def step_check_python() -> None:
-    """步骤 0：检查 Python 版本与 pywebview 可用性。"""
+    """步骤 0：检查 Python 版本、安装构建依赖。"""
     ver = sys.version_info
     print(f"   Python: {ver.major}.{ver.minor}.{ver.micro}")
+
+    # 构建必需依赖
+    _ensure_pkg("PyInstaller", "pyinstaller")
+    _ensure_pkg("pystray", "pystray>=0.19")
+    _ensure_pkg("PIL", "Pillow>=10.4")
 
     if ver >= (3, 13):
         print()
@@ -132,15 +156,8 @@ def step_check_python() -> None:
         print()
     else:
         # Python ≤ 3.12：确保 pywebview 已安装
-        try:
-            import webview  # noqa: F401
+        if _ensure_pkg("webview", "pywebview>=5.0"):
             print("   pywebview: 已安装 → 原生窗口模式")
-        except ImportError:
-            print("   pywebview: 未安装，正在自动安装…")
-            subprocess.check_call(
-                [sys.executable, "-m", "pip", "install", "pywebview>=5.0"],
-            )
-            print("   pywebview: 安装完成")
 
 
 def main() -> None:

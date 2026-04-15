@@ -68,8 +68,6 @@ hiddenimports = [
     "PIL",
     # OpenAI
     "openai",
-    # pywebview（原生窗口）
-    "webview",
     # pystray（托盘图标）
     "pystray",
     "pystray._win32",
@@ -81,6 +79,14 @@ hiddenimports = [
     "encodings",
     "encodings.idna",
 ]
+
+# Python ≤3.12 且 pywebview 已安装时，才打包 webview
+if sys.version_info < (3, 13):
+    try:
+        import webview  # noqa: F401
+        hiddenimports.append("webview")
+    except ImportError:
+        pass
 
 a = Analysis(
     [str(BASE / "launcher.py")],
@@ -98,6 +104,11 @@ a = Analysis(
         "scipy",
         "notebook",
         "jupyter",
+        "tensorboard",
+        "torch.utils.tensorboard",
+        "sympy",
+        "IPython",
+        "jedi",
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
