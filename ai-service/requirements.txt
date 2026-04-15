@@ -27,6 +27,7 @@ pydantic-settings>=2.5
 # Logging
 loguru>=0.7
 
-# 桌面应用（托盘图标）
+# 桌面应用（原生窗口 + 托盘图标）
+pywebview>=5.0
 pystray>=0.19
 Pillow>=10.4

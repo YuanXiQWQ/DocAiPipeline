@@ -22,6 +22,8 @@ datas = [
     (str(BASE / "web_dist"), "web_dist"),
     # .env.example 作为默认配置参考
     (str(BASE / ".env.example"), "."),
+    # 应用图标（系统托盘用）
+    (str(BASE / "icon.ico"), "."),
 ]
 
 # 可选：YOLO 模型文件（如果存在）
@@ -66,9 +68,15 @@ hiddenimports = [
     "PIL",
     # OpenAI
     "openai",
+    # pywebview（原生窗口）
+    "webview",
     # pystray（托盘图标）
     "pystray",
     "pystray._win32",
+    # 新增路由
+    "app.routers.history_router",
+    "app.routers.summary",
+    "app.history",
     # 其他
     "encodings",
     "encodings.idna",
@@ -119,6 +127,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # 如果有图标文件可以在这里指定
-    # icon=str(BASE / "icon.ico"),
+    icon=str(BASE / "icon.ico"),
 )

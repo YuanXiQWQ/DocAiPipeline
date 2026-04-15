@@ -4,6 +4,7 @@ name: 构建桌面应用 & Release
 on:
   push:
     tags:
+      - "[0-9]+.[0-9]+"               # 匹配 x.x 格式的标签
       - "[0-9]+.[0-9]+.[0-9]+"        # 匹配 x.x.x 格式的标签
 
 permissions:

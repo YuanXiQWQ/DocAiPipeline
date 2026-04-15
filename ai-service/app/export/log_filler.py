@@ -51,7 +51,9 @@ def _patch_openpyxl_pivot_cache() -> None:
             from openpyxl.packaging.relationship import (
                 get_dependents, get_rels_path, RelationshipList,
             )
+            # noinspection PyProtectedMember
             from openpyxl.worksheet._reader import WorksheetReader
+            # noinspection PyProtectedMember
             from openpyxl.worksheet._read_only import ReadOnlyWorksheet
             from openpyxl.comments.comment_sheet import CommentSheet
             from openpyxl.drawing.spreadsheet_drawing import SpreadsheetDrawing

@@ -2,9 +2,9 @@
 
 功能：
 1. 启动 FastAPI 后端（内嵌前端静态文件）
-2. 自动打开浏览器
+2. 在 pywebview 原生窗口中显示前端界面
 3. 系统托盘图标（右键退出）
-4. 关闭托盘时优雅停止服务
+4. 关闭窗口/托盘时优雅停止服务
 
 用法：
 - 开发模式：python launcher.py
@@ -34,6 +34,8 @@ APP_NAME = "DocAI Pipeline"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
 ICON_FILE = "icon.ico"
+WINDOW_WIDTH = 1280
+WINDOW_HEIGHT = 860
 
 # ------------------------------------------------------------------
 # 工具函数
@@ -78,7 +80,12 @@ def _base_dir() -> Path:
 # ------------------------------------------------------------------
 
 
-def _run_tray(host: str, port: int, shutdown_event: threading.Event) -> None:
+def _run_tray(
+    host: str,
+    port: int,
+    shutdown_event: threading.Event,
+    webview_window: Any = None,
+) -> None:
     """运行系统托盘图标。需要 pystray 和 Pillow。"""
     try:
         import pystray
@@ -99,11 +106,26 @@ def _run_tray(host: str, port: int, shutdown_event: threading.Event) -> None:
         image = Image.new("RGB", (64, 64), color=(16, 185, 129))
 
     def on_open(_icon: Any, _item: Any) -> None:
+        # 如果有 webview 窗口，尝试显示它；否则打开浏览器
+        if webview_window is not None:
+            # noinspection PyBroadException
+            try:
+                webview_window.show()
+                return
+            except Exception:
+                pass
         webbrowser.open(url)
 
     def on_quit(_icon: Any, _item: Any) -> None:
         shutdown_event.set()
         _icon.stop()
+        # 关闭 webview 窗口
+        if webview_window is not None:
+            # noinspection PyBroadException
+            try:
+                webview_window.destroy()
+            except Exception:
+                pass
 
     menu = pystray.Menu(
         pystray.MenuItem(f"打开 {APP_NAME}", on_open, default=True),
@@ -122,6 +144,14 @@ def _run_tray(host: str, port: int, shutdown_event: threading.Event) -> None:
 
 
 def main() -> None:
+    # PyInstaller console=False 模式下 sys.stdout/stderr 为 None，
+    # uvicorn 的日志 formatter 会调用 stream.isatty() 导致 AttributeError。
+    # 将 None 流替换为 devnull 以避免崩溃。
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
+
     # 设置工作目录为 ai-service 根（确保 .env / user_settings.json 可被找到）
     base = _base_dir()
     os.chdir(base)
@@ -153,24 +183,75 @@ def main() -> None:
     server_thread = threading.Thread(target=server.run, daemon=True)
     server_thread.start()
 
-    # 等待服务就绪后打开浏览器
-    if _wait_for_server(host, port):
-        logger.info(f"服务已就绪，正在打开浏览器: {url}")
-        webbrowser.open(url)
-    else:
+    # 等待服务就绪
+    if not _wait_for_server(host, port):
         logger.error("服务启动超时！")
+        return
 
-    # 启动系统托盘（阻塞主线程直到退出）
-    tray_thread = threading.Thread(target=_run_tray, args=(host, port, shutdown_event), daemon=True)
-    tray_thread.start()
+    logger.info(f"服务已就绪: {url}")
 
-    # 等待退出信号（托盘退出或 Ctrl+C）
+    # 尝试导入 pywebview
     try:
-        while not shutdown_event.is_set():
-            shutdown_event.wait(timeout=1.0)
-    except KeyboardInterrupt:
-        logger.info("收到 Ctrl+C，正在关闭…")
-        shutdown_event.set()
+        import webview as _webview  # pywebview
+        _has_webview = True
+    except ImportError:
+        _webview = None  # type: ignore[assignment]
+        _has_webview = False
+
+    if _has_webview:
+        # pywebview 原生窗口模式
+        _wv_window = _webview.create_window(
+            APP_NAME,
+            url,
+            width=WINDOW_WIDTH,
+            height=WINDOW_HEIGHT,
+            min_size=(800, 600),
+        )
+
+        def _on_closed() -> None:
+            """窗口关闭时触发优雅退出。"""
+            shutdown_event.set()
+
+        _wv_window.events.closed += _on_closed
+
+        # 启动托盘（后台线程）
+        tray_thread = threading.Thread(
+            target=_run_tray,
+            args=(host, port, shutdown_event, _wv_window),
+            daemon=True,
+        )
+        tray_thread.start()
+
+        # webview.start() 会阻塞主线程直到窗口关闭
+        # Windows 上优先使用 EdgeChromium（系统自带 WebView2）
+        logger.info("正在打开应用窗口…")
+        # noinspection PyBroadException
+        try:
+            _webview.start(gui="edgechromium")
+        except Exception:
+            # 若 edgechromium 不可用，尝试默认后端
+            _webview.start()
+
+    else:
+        # 回退到浏览器模式
+        logger.warning("pywebview 未安装，回退到浏览器模式")
+        webbrowser.open(url)
+
+        # 启动托盘（后台线程）
+        tray_thread = threading.Thread(
+            target=_run_tray,
+            args=(host, port, shutdown_event),
+            daemon=True,
+        )
+        tray_thread.start()
+
+        # 等待退出信号（托盘退出或 Ctrl+C）
+        try:
+            while not shutdown_event.is_set():
+                shutdown_event.wait(timeout=1.0)
+        except KeyboardInterrupt:
+            logger.info("收到 Ctrl+C，正在关闭…")
+            shutdown_event.set()
 
     # 优雅关闭 uvicorn
     logger.info("正在停止服务…")
