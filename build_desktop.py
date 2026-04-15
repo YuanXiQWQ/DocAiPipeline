@@ -11,8 +11,12 @@
 
 前置条件：
     - Node.js + npm（用于构建前端）
-    - Python + pip install pyinstaller pystray Pillow（用于打包）
+    - Python ≤3.12 + pip install pyinstaller pystray Pillow pywebview（用于打包）
     - 已安装 ai-service/requirements.txt 中的所有依赖
+
+注意：Python 3.13+ 下 pywebview 的依赖 pythonnet 尚未适配，
+      构建产物将自动回退为浏览器模式。
+      要获得原生窗口体验，请使用 Python 3.11 或 3.12 构建。
 """
 
 from __future__ import annotations
@@ -115,10 +119,35 @@ def step_cleanup() -> None:
     print("[OK] 临时文件已清理")
 
 
+def step_check_python() -> None:
+    """步骤 0：检查 Python 版本与 pywebview 可用性。"""
+    ver = sys.version_info
+    print(f"   Python: {ver.major}.{ver.minor}.{ver.micro}")
+
+    if ver >= (3, 13):
+        print()
+        print("[!] 警告：Python 3.13+ 下 pywebview 的依赖 pythonnet 尚未适配。")
+        print("    构建产物将回退为浏览器模式（功能完整，但没有原生窗口）。")
+        print("    如需原生窗口，请使用 Python 3.11 或 3.12。")
+        print()
+    else:
+        # Python ≤ 3.12：确保 pywebview 已安装
+        try:
+            import webview  # noqa: F401
+            print("   pywebview: 已安装 → 原生窗口模式")
+        except ImportError:
+            print("   pywebview: 未安装，正在自动安装…")
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "install", "pywebview>=5.0"],
+            )
+            print("   pywebview: 安装完成")
+
+
 def main() -> None:
     print("[BUILD] DocAI Pipeline 桌面应用构建脚本")
-    print(f"   项目根目录: {ROOT}\n")
+    print(f"   项目根目录: {ROOT}")
 
+    step_check_python()
     step_build_frontend()
     step_copy_frontend()
     step_pyinstaller()

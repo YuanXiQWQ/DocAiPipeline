@@ -46,7 +46,7 @@ def _patch_openpyxl_pivot_cache() -> None:
         import openpyxl.reader.excel as _xl_mod
         _orig_read_ws = _xl_mod.ExcelReader.read_worksheets
 
-        def _safe_read_worksheets(self: object) -> None:  # type: ignore[no-untyped-def]
+        def _safe_read_worksheets(self: Any) -> None:  # type: ignore[no-untyped-def]
             """包装 read_worksheets：让 pivot 关联失败时跳过而非中断。"""
             from openpyxl.xml.functions import fromstring
             from openpyxl.packaging.relationship import (

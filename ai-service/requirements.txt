@@ -27,7 +27,9 @@ pydantic-settings>=2.5
 # Logging
 loguru>=0.7
 
-# 桌面应用（原生窗口 + 托盘图标）
-pywebview>=5.0
+# 桌面应用（托盘图标）
 pystray>=0.19
 Pillow>=10.4
+
+# 原生窗口（可选，仅 Python ≤3.12；pythonnet 尚不支持 3.13+）
+# pywebview>=5.0

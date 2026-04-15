@@ -84,7 +84,7 @@ def _run_tray(
         host: str,
         port: int,
         shutdown_event: threading.Event,
-        webview_window: Any = None,
+        webview_window: Any | None = None,
 ) -> None:
     """运行系统托盘图标。需要 pystray 和 Pillow。"""
     try:
@@ -110,7 +110,7 @@ def _run_tray(
         if webview_window is not None:
             # noinspection PyBroadException
             try:
-                webview_window.show()
+                webview_window.show()  # type: ignore[union-attr]
                 return
             except Exception:
                 pass
@@ -123,7 +123,7 @@ def _run_tray(
         if webview_window is not None:
             # noinspection PyBroadException
             try:
-                webview_window.destroy()
+                webview_window.destroy()  # type: ignore[union-attr]
             except Exception:
                 pass
 
@@ -200,6 +200,7 @@ def main() -> None:
 
     if _has_webview:
         # pywebview 原生窗口模式
+        assert _webview is not None
         _wv_window = _webview.create_window(
             APP_NAME,
             url,

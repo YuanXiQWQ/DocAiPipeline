@@ -69,7 +69,10 @@ Open `http://localhost:5173` to test the full workflow.
 
 ### Option 2: Desktop App (recommended for non-technical users)
 
-**Prerequisites**: Python 3.11+, Node.js 18+
+**Prerequisites**: Python 3.11–3.12, Node.js 18+
+
+> ⚠️ pywebview's dependency pythonnet does not yet support Python 3.13+. The build script will
+> automatically fall back to browser mode. For native window experience, use **Python 3.11 or 3.12**.
 
 ```bash
 # One-click build

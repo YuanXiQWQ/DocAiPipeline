@@ -68,7 +68,10 @@ npm run dev                       # → http://localhost:5173
 
 ### 方式二：桌面应用（推荐非技术用户）
 
-**前置条件**：Python 3.11+、Node.js 18+
+**前置条件**：Python 3.11–3.12、Node.js 18+
+
+> ⚠️ Python 3.13+ 下 pywebview 依赖的 pythonnet 尚未适配，构建脚本会自动回退为浏览器模式。
+> 要获得原生窗口体验，请使用 **Python 3.11 或 3.12** 构建。
 
 ```bash
 # 一键构建
