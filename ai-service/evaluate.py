@@ -78,8 +78,8 @@ def _partial_match(predicted: str, expected: str) -> float:
 
 
 def evaluate(
-    ground_truth: list[dict[str, Any]],
-    predictions: list[dict[str, Any]],
+        ground_truth: list[dict[str, Any]],
+        predictions: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """评估预测结果与标注数据。
 
@@ -178,14 +178,14 @@ def _print_report(result: dict[str, Any]) -> None:
 
     print(f"\n按字段分:")
     print(f"  {'字段名':<25} {'精确匹配':>8} {'部分匹配':>8} {'样本数':>6}")
-    print(f"  {'-'*25} {'-'*8} {'-'*8} {'-'*6}")
+    print(f"  {'-' * 25} {'-' * 8} {'-' * 8} {'-' * 6}")
     for name, stats in result["per_field"].items():
         print(f"  {name:<25} {stats['exact_match']:>7.1%} {stats['partial_match']:>7.1%} {stats['count']:>6}")
 
     if result["per_doc_type"]:
         print(f"\n按文档类型分:")
         print(f"  {'文档类型':<20} {'精确匹配':>8} {'部分匹配':>8} {'字段数':>6}")
-        print(f"  {'-'*20} {'-'*8} {'-'*8} {'-'*6}")
+        print(f"  {'-' * 20} {'-' * 8} {'-' * 8} {'-' * 6}")
         for dtype, stats in result["per_doc_type"].items():
             print(f"  {dtype:<20} {stats['exact_match']:>7.1%} {stats['partial_match']:>7.1%} {stats['count']:>6}")
 

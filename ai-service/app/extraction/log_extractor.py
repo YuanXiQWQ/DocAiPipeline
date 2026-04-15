@@ -127,10 +127,10 @@ class LogExtractor:
     # ------------------------------------------------------------------
 
     def extract_page(
-        self,
-        image: np.ndarray,
-        filename: str = "",
-        page: int = 1,
+            self,
+            image: np.ndarray,
+            filename: str = "",
+            page: int = 1,
     ) -> LogMeasurementResult:
         """识别单页检尺单图像，返回结构化结果。"""
         if self.client is None:
@@ -192,9 +192,9 @@ class LogExtractor:
 
     @staticmethod
     def _parse_response(
-        raw_text: str,
-        filename: str,
-        page: int,
+            raw_text: str,
+            filename: str,
+            page: int,
     ) -> LogMeasurementResult:
         """将 VLM JSON 响应解析为 LogMeasurementResult。"""
         text = raw_text.strip()
@@ -293,7 +293,7 @@ class LogExtractor:
         # ① 单根合理性校验
         for entry in result.entries:
             if entry.length_m > 0 and not (
-                self.MIN_LENGTH_M <= entry.length_m <= self.MAX_LENGTH_M
+                    self.MIN_LENGTH_M <= entry.length_m <= self.MAX_LENGTH_M
             ):
                 entry.needs_review = True
                 entry.review_reason = (
@@ -305,7 +305,7 @@ class LogExtractor:
                 )
 
             if entry.diameter_cm > 0 and not (
-                self.MIN_DIAMETER_CM <= entry.diameter_cm <= self.MAX_DIAMETER_CM
+                    self.MIN_DIAMETER_CM <= entry.diameter_cm <= self.MAX_DIAMETER_CM
             ):
                 entry.needs_review = True
                 entry.review_reason = (

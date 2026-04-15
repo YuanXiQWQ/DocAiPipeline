@@ -253,11 +253,11 @@ class FactoryExtractor:
     # ------------------------------------------------------------------
 
     def extract(
-        self,
-        image: np.ndarray,
-        doc_type: str,
-        filename: str = "",
-        page: int = 1,
+            self,
+            image: np.ndarray,
+            doc_type: str,
+            filename: str = "",
+            page: int = 1,
     ) -> BaseModel:
         """识别工厂单据页面，返回对应的结构化结果。
 
@@ -299,7 +299,7 @@ class FactoryExtractor:
     # ------------------------------------------------------------------
 
     def _call_vlm(
-        self, system_prompt: str, b64_image: str, *, max_tokens: int = 4000,
+            self, system_prompt: str, b64_image: str, *, max_tokens: int = 4000,
     ) -> str:
         """调用 VLM 并返回原始文本。"""
         assert self.client is not None
@@ -379,7 +379,7 @@ class FactoryExtractor:
     # ------------------------------------------------------------------
 
     def _parse_log_output(
-        self, data: dict, filename: str, page: int,
+            self, data: dict, filename: str, page: int,
     ) -> LogOutputResult:
         """解析出库表。"""
         # 出库表可能有多个 table（左右分区）
@@ -417,7 +417,7 @@ class FactoryExtractor:
         )
 
     def _parse_soak_pool(
-        self, data: dict, filename: str, page: int,
+            self, data: dict, filename: str, page: int,
     ) -> SoakPoolResult:
         """解析入池表。"""
         meta = SoakPoolMeta(
@@ -453,7 +453,7 @@ class FactoryExtractor:
         )
 
     def _parse_slicing(
-        self, data: dict, filename: str, page: int,
+            self, data: dict, filename: str, page: int,
     ) -> SlicingResult:
         """解析上机表。"""
         meta = SlicingMeta(
@@ -488,7 +488,7 @@ class FactoryExtractor:
         )
 
     def _parse_packing(
-        self, data: dict, filename: str, page: int,
+            self, data: dict, filename: str, page: int,
     ) -> PackingResult:
         """解析打包报表。"""
         meta = PackingMeta(date=str(data.get("date", "")))
@@ -554,7 +554,7 @@ class FactoryExtractor:
 
     @staticmethod
     def _empty_result(
-        doc_type: str, filename: str, page: int, raw_text: str,
+            doc_type: str, filename: str, page: int, raw_text: str,
     ) -> BaseModel:
         """VLM 返回无效 JSON 时构造空结果。"""
         warn = f"VLM 响应不是有效 JSON: {raw_text[:200]}"

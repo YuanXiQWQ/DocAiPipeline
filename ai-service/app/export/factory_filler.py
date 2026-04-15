@@ -22,6 +22,7 @@ from app.schemas import (
 
 # 确保 monkey-patch 已执行
 from app.export.log_filler import _patch_openpyxl_pivot_cache
+
 _patch_openpyxl_pivot_cache()
 
 
@@ -85,8 +86,8 @@ class LogOutputFiller:
         self.template_path = template_path
 
     def fill(
-        self, results: list[LogOutputResult], output_path: Path,
-        *, species: str = "欧橡", owner: str = "新公司",
+            self, results: list[LogOutputResult], output_path: Path,
+            *, species: str = "欧橡", owner: str = "新公司",
     ) -> Path:
         wb = openpyxl.load_workbook(self.template_path)
         ws = wb[self.SHEET_NAME]
@@ -136,8 +137,8 @@ class SoakPoolFiller:
         self.template_path = template_path
 
     def fill(
-        self, results: list[SoakPoolResult], output_path: Path,
-        *, owner: str = "新公司",
+            self, results: list[SoakPoolResult], output_path: Path,
+            *, owner: str = "新公司",
     ) -> Path:
         wb = openpyxl.load_workbook(self.template_path)
         ws = wb[self.SHEET_NAME]
@@ -149,23 +150,23 @@ class SoakPoolFiller:
             date_obj = _parse_date(r.meta.date)
             for e in r.entries:
                 if date_obj:
-                    ws.cell(current, 1, date_obj.year)       # 入池年
-                    ws.cell(current, 2, date_obj.month)      # 入池月
-                    ws.cell(current, 3, date_obj)             # 入池日期
-                ws.cell(current, 4, r.meta.pool_number)       # 池号
-                ws.cell(current, 5, r.meta.batch_id)          # 批号
-                ws.cell(current, 6, r.meta.owner or owner)    # 货物所有人
-                ws.cell(current, 8, r.meta.craft or "刨切")   # 工艺
-                ws.cell(current, 9, r.meta.board_thickness)   # 表板厚度
+                    ws.cell(current, 1, date_obj.year)  # 入池年
+                    ws.cell(current, 2, date_obj.month)  # 入池月
+                    ws.cell(current, 3, date_obj)  # 入池日期
+                ws.cell(current, 4, r.meta.pool_number)  # 池号
+                ws.cell(current, 5, r.meta.batch_id)  # 批号
+                ws.cell(current, 6, r.meta.owner or owner)  # 货物所有人
+                ws.cell(current, 8, r.meta.craft or "刨切")  # 工艺
+                ws.cell(current, 9, r.meta.board_thickness)  # 表板厚度
                 ws.cell(current, 10, r.meta.material_name or "大方")  # 物料名称
-                ws.cell(current, 11, e.length_mm)             # 长
-                ws.cell(current, 12, e.width_mm)              # 宽
-                ws.cell(current, 13, e.thickness_mm)          # 厚
+                ws.cell(current, 11, e.length_mm)  # 长
+                ws.cell(current, 12, e.width_mm)  # 宽
+                ws.cell(current, 13, e.thickness_mm)  # 厚
                 # 立方数 = L * W * T / 1e9
                 if e.length_mm > 0 and e.width_mm > 0 and e.thickness_mm > 0:
                     vol = e.length_mm * e.width_mm * e.thickness_mm / 1e9
-                    ws.cell(current, 14, round(vol, 3))       # 立方数
-                ws.cell(current, 15, 1)                        # 根数（每行1根）
+                    ws.cell(current, 14, round(vol, 3))  # 立方数
+                ws.cell(current, 15, 1)  # 根数（每行1根）
                 current += 1
                 count += 1
 
@@ -192,8 +193,8 @@ class SlicingFiller:
         self.template_path = template_path
 
     def fill(
-        self, results: list[SlicingResult], output_path: Path,
-        *, owner: str = "新公司",
+            self, results: list[SlicingResult], output_path: Path,
+            *, owner: str = "新公司",
     ) -> Path:
         wb = openpyxl.load_workbook(self.template_path)
         ws = wb[self.SHEET_NAME]
@@ -205,20 +206,20 @@ class SlicingFiller:
             date_obj = _parse_date(r.meta.date)
             for e in r.entries:
                 # 入池信息留空（上机数据与入池分开填）
-                ws.cell(current, 5, r.meta.batch_id)         # 批号
-                ws.cell(current, 6, r.meta.owner or owner)   # 货物所有人
-                ws.cell(current, 8, "刨切")                  # 工艺
-                ws.cell(current, 10, "大方")                  # 物料名称
-                ws.cell(current, 12, e.width_mm)              # 宽
-                ws.cell(current, 13, e.thickness_mm)          # 厚
+                ws.cell(current, 5, r.meta.batch_id)  # 批号
+                ws.cell(current, 6, r.meta.owner or owner)  # 货物所有人
+                ws.cell(current, 8, "刨切")  # 工艺
+                ws.cell(current, 10, "大方")  # 物料名称
+                ws.cell(current, 12, e.width_mm)  # 宽
+                ws.cell(current, 13, e.thickness_mm)  # 厚
                 # 上机列
                 if date_obj:
-                    ws.cell(current, 16, date_obj.year)       # 上机年
-                    ws.cell(current, 17, date_obj.month)      # 上机月
-                    ws.cell(current, 18, date_obj)             # 上机日期
-                ws.cell(current, 19, 1)                        # 上机根数
+                    ws.cell(current, 16, date_obj.year)  # 上机年
+                    ws.cell(current, 17, date_obj.month)  # 上机月
+                    ws.cell(current, 18, date_obj)  # 上机日期
+                ws.cell(current, 19, 1)  # 上机根数
                 if e.core_thickness_mm > 0:
-                    ws.cell(current, 20, e.core_thickness_mm) # 尾板厚度
+                    ws.cell(current, 20, e.core_thickness_mm)  # 尾板厚度
                 current += 1
                 count += 1
 
@@ -243,8 +244,8 @@ class PackingFiller:
         self.template_path = template_path
 
     def fill(
-        self, results: list[PackingResult], output_path: Path,
-        *, species: str = "欧橡", workshop: str = "大锯车间",
+            self, results: list[PackingResult], output_path: Path,
+            *, species: str = "欧橡", workshop: str = "大锯车间",
     ) -> Path:
         wb = openpyxl.load_workbook(self.template_path)
         ws = wb[self.SHEET_NAME]
@@ -258,30 +259,30 @@ class PackingFiller:
                 if e.piece_count <= 0:
                     continue
                 if date_obj:
-                    ws.cell(current, 1, date_obj.year)        # 年
-                    ws.cell(current, 2, date_obj.month)       # 月
-                    ws.cell(current, 3, date_obj)              # 日期
-                ws.cell(current, 4, workshop)                  # 车间
-                ws.cell(current, 5, "产品")                   # 物料性质
-                ws.cell(current, 6, "打包")                   # 工序
-                ws.cell(current, 7, species)                   # 木种
-                ws.cell(current, 8, "刨切表板")               # 货物名称
-                ws.cell(current, 10, "")                       # 送货客户
-                ws.cell(current, 12, self._map_owner(e.owner)) # 货物所有人
-                ws.cell(current, 13, e.package_id)             # 包号
-                ws.cell(current, 14, e.grade)                  # 等级
-                ws.cell(current, 15, e.craft)                  # 工艺
-                ws.cell(current, 18, e.length_mm)              # 长度
-                ws.cell(current, 19, e.width_mm)               # 宽度
-                ws.cell(current, 20, e.thickness)              # 厚度
-                ws.cell(current, 21, e.calc_length_mm)         # 计尺长
-                ws.cell(current, 22, e.calc_width_mm)          # 计尺宽
-                ws.cell(current, 23, e.calc_thickness)         # 计尺厚
-                ws.cell(current, 24, e.piece_count)            # 片数
+                    ws.cell(current, 1, date_obj.year)  # 年
+                    ws.cell(current, 2, date_obj.month)  # 月
+                    ws.cell(current, 3, date_obj)  # 日期
+                ws.cell(current, 4, workshop)  # 车间
+                ws.cell(current, 5, "产品")  # 物料性质
+                ws.cell(current, 6, "打包")  # 工序
+                ws.cell(current, 7, species)  # 木种
+                ws.cell(current, 8, "刨切表板")  # 货物名称
+                ws.cell(current, 10, "")  # 送货客户
+                ws.cell(current, 12, self._map_owner(e.owner))  # 货物所有人
+                ws.cell(current, 13, e.package_id)  # 包号
+                ws.cell(current, 14, e.grade)  # 等级
+                ws.cell(current, 15, e.craft)  # 工艺
+                ws.cell(current, 18, e.length_mm)  # 长度
+                ws.cell(current, 19, e.width_mm)  # 宽度
+                ws.cell(current, 20, e.thickness)  # 厚度
+                ws.cell(current, 21, e.calc_length_mm)  # 计尺长
+                ws.cell(current, 22, e.calc_width_mm)  # 计尺宽
+                ws.cell(current, 23, e.calc_thickness)  # 计尺厚
+                ws.cell(current, 24, e.piece_count)  # 片数
                 # 平方数：计尺长 * 计尺宽 * 片数 / 1e6
                 if e.calc_length_mm > 0 and e.calc_width_mm > 0 and e.piece_count > 0:
                     area = e.calc_length_mm * e.calc_width_mm * e.piece_count / 1e6
-                    ws.cell(current, 25, round(area, 3))       # m²
+                    ws.cell(current, 25, round(area, 3))  # m²
                 current += 1
                 count += 1
 

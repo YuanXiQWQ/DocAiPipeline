@@ -27,16 +27,16 @@ from app.config import settings
 
 class HistoryRecord(BaseModel):
     """单条处理历史记录。"""
-    id: str                                 # 唯一标识（时间戳+哈希）
-    timestamp: str                          # ISO 8601 时间戳
-    doc_type: str                           # 文档类型
-    filename: str                           # 原始文件名
-    pages: int                              # 页数
-    record_count: int                       # 识别出的记录数
-    warnings: list[str] = []                # 警告信息
-    results: list[dict[str, Any]] = []      # 识别结果（完整 JSON）
-    filled: bool = False                    # 是否已填充到 Excel
-    fill_filename: str = ""                 # 填充后的 Excel 文件名
+    id: str  # 唯一标识（时间戳+哈希）
+    timestamp: str  # ISO 8601 时间戳
+    doc_type: str  # 文档类型
+    filename: str  # 原始文件名
+    pages: int  # 页数
+    record_count: int  # 识别出的记录数
+    warnings: list[str] = []  # 警告信息
+    results: list[dict[str, Any]] = []  # 识别结果（完整 JSON）
+    filled: bool = False  # 是否已填充到 Excel
+    fill_filename: str = ""  # 填充后的 Excel 文件名
 
 
 class HistorySummary(BaseModel):
@@ -53,11 +53,11 @@ class HistorySummary(BaseModel):
 
 class HistoryStats(BaseModel):
     """历史数据统计。"""
-    total_records: int                      # 总处理次数
-    by_doc_type: dict[str, int]             # 按类型统计
-    total_pages_processed: int              # 总页数
-    total_entries_extracted: int            # 总抽取记录数
-    recent_7_days: int                      # 近 7 天处理次数
+    total_records: int  # 总处理次数
+    by_doc_type: dict[str, int]  # 按类型统计
+    total_pages_processed: int  # 总页数
+    total_entries_extracted: int  # 总抽取记录数
+    recent_7_days: int  # 近 7 天处理次数
 
 
 # ------------------------------------------------------------------
@@ -80,11 +80,11 @@ def _make_id(doc_type: str, filename: str) -> str:
 
 
 def save_record(
-    doc_type: str,
-    filename: str,
-    pages: int,
-    results: list[dict[str, Any]],
-    warnings: list[str] | None = None,
+        doc_type: str,
+        filename: str,
+        pages: int,
+        results: list[dict[str, Any]],
+        warnings: list[str] | None = None,
 ) -> HistoryRecord:
     """保存一条处理历史记录。"""
     record_id = _make_id(doc_type, filename)
@@ -120,11 +120,11 @@ def mark_filled(record_id: str, fill_filename: str) -> bool:
 
 
 def list_records(
-    *,
-    doc_type: str | None = None,
-    limit: int = 50,
-    offset: int = 0,
-    keyword: str = "",
+        *,
+        doc_type: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        keyword: str = "",
 ) -> tuple[list[HistorySummary], int]:
     """列出历史记录（按时间倒序），返回 (列表, 总数)。"""
     hdir = _history_dir()

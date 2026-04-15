@@ -6,7 +6,7 @@
  * 用法：const t = useT(); t("upload.hint")
  */
 
-import { useState, useCallback, useEffect } from "react";
+import {useState, useCallback, useEffect} from "react";
 
 import zhCN from "./lang/zh-CN.json";
 import en from "./lang/en.json";
@@ -16,9 +16,9 @@ export type Locale = "zh-CN" | "en" | "sr";
 
 /** 各语言翻译表，由 lang/*.json 静态导入 */
 const messages: Record<Locale, Record<string, string>> = {
-  "zh-CN": zhCN,
-  en,
-  sr,
+    "zh-CN": zhCN,
+    en,
+    sr,
 };
 
 /** 当前激活的语言 */
@@ -28,14 +28,14 @@ let _currentLocale: Locale = "zh-CN";
 const _listeners: Set<() => void> = new Set();
 
 export function getCurrentLocale(): Locale {
-  return _currentLocale;
+    return _currentLocale;
 }
 
 /** 切换当前语言，并通知所有监听器刷新 */
 export function setLocale(locale: Locale): void {
-  if (locale === _currentLocale) return;
-  _currentLocale = locale;
-  _listeners.forEach((fn) => fn());
+    if (locale === _currentLocale) return;
+    _currentLocale = locale;
+    _listeners.forEach((fn) => fn());
 }
 
 /**
@@ -43,29 +43,31 @@ export function setLocale(locale: Locale): void {
  * 找不到时回退到 zh-CN，再找不到返回 key 本身。
  */
 export function t(key: string): string {
-  return messages[_currentLocale]?.[key]
-    ?? messages["zh-CN"]?.[key]
-    ?? key;
+    return messages[_currentLocale]?.[key]
+        ?? messages["zh-CN"]?.[key]
+        ?? key;
 }
 
 /**
  * React Hook：返回翻译函数 t()，语言切换时自动触发组件重渲染。
  */
 export function useT(): (key: string) => string {
-  const [, setTick] = useState(0);
+    const [, setTick] = useState(0);
 
-  useEffect(() => {
-    const listener = () => setTick((n) => n + 1);
-    _listeners.add(listener);
-    return () => { _listeners.delete(listener); };
-  }, []);
+    useEffect(() => {
+        const listener = () => setTick((n) => n + 1);
+        _listeners.add(listener);
+        return () => {
+            _listeners.delete(listener);
+        };
+    }, []);
 
-  return useCallback((key: string) => t(key), [_currentLocale]);
+    return useCallback((key: string) => t(key), [_currentLocale]);
 }
 
 /** 语言选择器选项列表 */
 export const LOCALE_OPTIONS: { value: Locale; label: string }[] = [
-  { value: "zh-CN", label: "简体中文" },
-  { value: "en", label: "English" },
-  { value: "sr", label: "Srpski" },
+    {value: "zh-CN", label: "简体中文"},
+    {value: "en", label: "English"},
+    {value: "sr", label: "Srpski"},
 ];

@@ -16,6 +16,7 @@ from loguru import logger
 
 from app.schemas import LogEntry, LogMeasurementResult, LogSheetMeta
 
+
 # ------------------------------------------------------------------
 # Monkey-patch: openpyxl 透视表兼容性补丁
 # ------------------------------------------------------------------
@@ -75,7 +76,8 @@ def _patch_openpyxl_pivot_cache() -> None:
                     rels = get_dependents(self.archive, rels_path)  # type: ignore[attr-defined]
 
                 if self.read_only:  # type: ignore[attr-defined]
-                    ws = ReadOnlyWorksheet(self.wb, sheet.name, rel.target, self.shared_strings)  # type: ignore[attr-defined]
+                    ws = ReadOnlyWorksheet(self.wb, sheet.name, rel.target,
+                                           self.shared_strings)  # type: ignore[attr-defined]
                     ws.sheet_state = sheet.state
                     # noinspection PyProtectedMember
                     self.wb._sheets.append(ws)  # type: ignore[attr-defined]  # noqa: SLF001
@@ -84,7 +86,8 @@ def _patch_openpyxl_pivot_cache() -> None:
                 fh = self.archive.open(rel.target)  # type: ignore[attr-defined]
                 ws = self.wb.create_sheet(sheet.name)  # type: ignore[attr-defined]
                 ws._rels = rels
-                ws_parser = WorksheetReader(ws, fh, self.shared_strings, self.data_only, self.rich_text)  # type: ignore[attr-defined]
+                ws_parser = WorksheetReader(ws, fh, self.shared_strings, self.data_only,
+                                            self.rich_text)  # type: ignore[attr-defined]
                 ws_parser.bind_all()
                 fh.close()
 
@@ -125,44 +128,44 @@ def _patch_openpyxl_pivot_cache() -> None:
     except (ImportError, AttributeError):
         pass
 
-_patch_openpyxl_pivot_cache()
 
+_patch_openpyxl_pivot_cache()
 
 # ------------------------------------------------------------------
 # 数据源表列映射（0-indexed → 1-indexed for openpyxl）
 # ------------------------------------------------------------------
 
 # 数据源表列定义（col index 1-based）
-COL_YEAR = 1           # A: 年
-COL_MONTH = 2          # B: 月份
-COL_DATE = 3           # C: 日期
-COL_WORKSHOP = 4       # D: 车间
-COL_MATERIAL = 5       # E: 物料性质
-COL_PROCESS = 6        # F: 工序
-COL_SPECIES = 7        # G: 木种
-COL_GOODS_NAME = 8     # H: 货物名称
-COL_BATCH_ID = 9       # I: 序号/批次号
-COL_CUSTOMER = 10      # J: 送货客户
-COL_VEHICLE = 11       # K: 车牌号
-COL_OWNER = 12         # L: 货物所有人
-COL_LOG_ID = 13        # M: 包号/根号
-COL_GRADE = 14         # N: 等级
-COL_CRAFT = 15         # O: 工艺
-COL_SAW_NUM = 16       # P: 锯号/池号
-COL_INPUT_M3 = 17      # Q: 投入数量 m3
-COL_LENGTH = 18        # R: 长度
-COL_DIAMETER = 19      # S: 宽度/径级
-COL_THICKNESS = 20     # T: 厚度
-COL_CALC_LENGTH = 21   # U: 计尺长
-COL_CALC_WIDTH = 22    # V: 计尺宽
-COL_CALC_THICK = 23    # W: 计尺厚
-COL_COUNT = 24         # X: 片数/根数
-COL_QTY_M2 = 25        # Y: 数量 m2
-COL_QTY_M3 = 26        # Z: 数量 m3
-COL_PACK_NUM = 27      # AA: 包数
-COL_PACK_QTY = 28      # AB: 每包数量
-COL_COL1 = 29          # AC: 列1
-COL_WEIGHT = 30        # AD: 重量
+COL_YEAR = 1  # A: 年
+COL_MONTH = 2  # B: 月份
+COL_DATE = 3  # C: 日期
+COL_WORKSHOP = 4  # D: 车间
+COL_MATERIAL = 5  # E: 物料性质
+COL_PROCESS = 6  # F: 工序
+COL_SPECIES = 7  # G: 木种
+COL_GOODS_NAME = 8  # H: 货物名称
+COL_BATCH_ID = 9  # I: 序号/批次号
+COL_CUSTOMER = 10  # J: 送货客户
+COL_VEHICLE = 11  # K: 车牌号
+COL_OWNER = 12  # L: 货物所有人
+COL_LOG_ID = 13  # M: 包号/根号
+COL_GRADE = 14  # N: 等级
+COL_CRAFT = 15  # O: 工艺
+COL_SAW_NUM = 16  # P: 锯号/池号
+COL_INPUT_M3 = 17  # Q: 投入数量 m3
+COL_LENGTH = 18  # R: 长度
+COL_DIAMETER = 19  # S: 宽度/径级
+COL_THICKNESS = 20  # T: 厚度
+COL_CALC_LENGTH = 21  # U: 计尺长
+COL_CALC_WIDTH = 22  # V: 计尺宽
+COL_CALC_THICK = 23  # W: 计尺厚
+COL_COUNT = 24  # X: 片数/根数
+COL_QTY_M2 = 25  # Y: 数量 m2
+COL_QTY_M3 = 26  # Z: 数量 m3
+COL_PACK_NUM = 27  # AA: 包数
+COL_PACK_QTY = 28  # AB: 每包数量
+COL_COL1 = 29  # AC: 列1
+COL_WEIGHT = 30  # AD: 重量
 
 # 表头行（数据从第3行开始，第1行标签，第2行列名）
 HEADER_ROWS = 2
@@ -175,15 +178,15 @@ class LogFiller:
     SHEET_NAME = "数据源表"
 
     def __init__(
-        self,
-        template_path: Path,
-        *,
-        workshop: str = "大锯车间",
-        material: str = "原料",
-        process: str = "来料",
-        species: str = "欧橡",
-        goods_name: str = "原木",
-        owner: str = "新公司",
+            self,
+            template_path: Path,
+            *,
+            workshop: str = "大锯车间",
+            material: str = "原料",
+            process: str = "来料",
+            species: str = "欧橡",
+            goods_name: str = "原木",
+            owner: str = "新公司",
     ):
         self.template_path = template_path
         self.workshop = workshop
@@ -197,12 +200,12 @@ class LogFiller:
             raise FileNotFoundError(f"模板文件不存在: {self.template_path}")
 
     def fill(
-        self,
-        results: list[LogMeasurementResult],
-        output_path: Path,
-        *,
-        grade: str = "",
-        customer: str = "",
+            self,
+            results: list[LogMeasurementResult],
+            output_path: Path,
+            *,
+            grade: str = "",
+            customer: str = "",
     ) -> Path:
         """将一组检尺单识别结果写入 Excel 数据源表。
 
@@ -330,16 +333,16 @@ class LogFiller:
         return round(math.pi / 4 * d_m ** 2 * entry.length_m, 2)
 
     def _write_row(
-        self,
-        ws: Any,
-        *,
-        row: int,
-        date_obj: datetime | None,
-        meta: LogSheetMeta,
-        entry: LogEntry,
-        volume: float,
-        grade: str,
-        customer: str,
+            self,
+            ws: Any,
+            *,
+            row: int,
+            date_obj: datetime | None,
+            meta: LogSheetMeta,
+            entry: LogEntry,
+            volume: float,
+            grade: str,
+            customer: str,
     ) -> None:
         """向数据源表写入一行数据。"""
         if date_obj:

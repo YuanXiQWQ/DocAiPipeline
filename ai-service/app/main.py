@@ -162,7 +162,7 @@ async def download_legacy(filename: str):
 
 # 查找前端构建产物目录（支持多种相对路径）
 _FRONTEND_CANDIDATES = [
-    Path(__file__).resolve().parent.parent / "web_dist",       # PyInstaller 打包后
+    Path(__file__).resolve().parent.parent / "web_dist",  # PyInstaller 打包后
     Path(__file__).resolve().parent.parent.parent / "web" / "dist",  # 开发目录
 ]
 _frontend_dir: Path | None = None
@@ -182,6 +182,7 @@ if _frontend_dir is not None:
     # SPA 回退：所有未匹配的 GET 请求返回 index.html
     _index_html = (_frontend_dir / "index.html").read_text("utf-8")
 
+
     @app.get("/{path:path}", response_class=HTMLResponse, include_in_schema=False)
     async def _spa_fallback(path: str):
         """SPA 回退：将前端路由交给 index.html 处理。"""
@@ -191,11 +192,12 @@ if _frontend_dir is not None:
             return FileResponse(str(static_file))
         return HTMLResponse(_index_html)
 
+
     logger.info(f"前端静态文件已挂载: {_frontend_dir}")
 else:
     logger.info("未找到前端构建产物，仅提供 API 服务（前端需单独启动）")
 
-
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("app.main:app", host=settings.host, port=settings.port, reload=settings.debug)

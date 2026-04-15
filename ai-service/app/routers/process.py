@@ -37,6 +37,7 @@ _preprocessor = Preprocessor(dpi=300)
 
 router = APIRouter(prefix="/api", tags=["处理"])
 
+
 # ------------------------------------------------------------------
 # 文档类型枚举
 # ------------------------------------------------------------------
@@ -254,8 +255,8 @@ async def classify_document(file: UploadFile = File(...)):
 
 @router.post("/process", response_model=ProcessResponse)
 async def process_document(
-    file: UploadFile = File(...),
-    doc_type: DocType = Form(DocType.AUTO),
+        file: UploadFile = File(...),
+        doc_type: DocType = Form(DocType.AUTO),
 ):
     """统一文档处理端点。
 

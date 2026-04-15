@@ -89,8 +89,8 @@ async def list_templates():
 
 @router.post("/templates/{doc_type}")
 async def upload_template(
-    doc_type: str,
-    file: UploadFile = File(...),
+        doc_type: str,
+        file: UploadFile = File(...),
 ):
     """上传 Excel 模板。按 doc_type 分目录存放。"""
     if not file.filename or not file.filename.endswith(".xlsx"):
@@ -101,7 +101,7 @@ async def upload_template(
     with open(target, "wb") as buf:
         content = await file.read()
         buf.write(content)
-    logger.info(f"模板上传: {doc_type}/{file.filename} ({len(content)/1024:.1f}KB)")
+    logger.info(f"模板上传: {doc_type}/{file.filename} ({len(content) / 1024:.1f}KB)")
     return {"message": f"模板已保存: {target.relative_to(TEMPLATES_DIR)}"}
 
 
@@ -122,9 +122,9 @@ def _find_template(doc_type: str) -> Path:
 
 @router.post("/fill", response_model=FillResponse)
 async def fill_excel(
-    doc_type: str = Form(...),
-    results_json: str = Form(...),
-    template: UploadFile | None = File(None),
+        doc_type: str = Form(...),
+        results_json: str = Form(...),
+        template: UploadFile | None = File(None),
 ):
     """将识别结果填入 Excel 模板。
 

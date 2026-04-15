@@ -59,7 +59,7 @@ class DocumentDetector:
 
     @staticmethod
     def crop_documents(
-        image: np.ndarray, boxes: List[BoundingBox], padding: int = 10
+            image: np.ndarray, boxes: List[BoundingBox], padding: int = 10
     ) -> List[np.ndarray]:
         """从图像中裁切检测到的区域。"""
         h, w = image.shape[:2]

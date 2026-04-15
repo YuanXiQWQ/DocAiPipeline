@@ -25,7 +25,6 @@ from typing import Any
 import uvicorn
 from loguru import logger
 
-
 # ------------------------------------------------------------------
 # 常量
 # ------------------------------------------------------------------
@@ -36,6 +35,7 @@ DEFAULT_PORT = 8000
 ICON_FILE = "icon.ico"
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 860
+
 
 # ------------------------------------------------------------------
 # 工具函数
@@ -81,10 +81,10 @@ def _base_dir() -> Path:
 
 
 def _run_tray(
-    host: str,
-    port: int,
-    shutdown_event: threading.Event,
-    webview_window: Any = None,
+        host: str,
+        port: int,
+        shutdown_event: threading.Event,
+        webview_window: Any = None,
 ) -> None:
     """运行系统托盘图标。需要 pystray 和 Pillow。"""
     try:

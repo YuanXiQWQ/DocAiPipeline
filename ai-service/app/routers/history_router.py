@@ -12,10 +12,10 @@ router = APIRouter(prefix="/api/history", tags=["历史记录"])
 
 @router.get("", response_model=dict)
 async def list_history(
-    doc_type: str | None = Query(None, description="按文档类型筛选"),
-    keyword: str = Query("", description="搜索关键字（文件名/内容）"),
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
+        doc_type: str | None = Query(None, description="按文档类型筛选"),
+        keyword: str = Query("", description="搜索关键字（文件名/内容）"),
+        limit: int = Query(50, ge=1, le=200),
+        offset: int = Query(0, ge=0),
 ):
     """列出处理历史记录（按时间倒序）。"""
     records, total = history.list_records(

@@ -25,31 +25,31 @@ router = APIRouter(prefix="/api/summary", tags=["数据汇总"])
 
 class ImportSummary(BaseModel):
     """进口采购汇总。"""
-    total_batches: int = 0              # 总批次数
-    total_invoices: int = 0             # 发票数
-    total_amount_eur: float = 0.0       # 总金额（EUR）
-    total_volume_m3: float = 0.0        # 总体积（m³）
-    suppliers: dict[str, int] = {}       # 供应商 → 批次数
+    total_batches: int = 0  # 总批次数
+    total_invoices: int = 0  # 发票数
+    total_amount_eur: float = 0.0  # 总金额（EUR）
+    total_volume_m3: float = 0.0  # 总体积（m³）
+    suppliers: dict[str, int] = {}  # 供应商 → 批次数
 
 
 class LogSummary(BaseModel):
     """原木入库/出库汇总。"""
-    total_inbound_logs: int = 0         # 入库总根数
-    total_inbound_m3: float = 0.0       # 入库总体积
-    total_outbound_logs: int = 0        # 出库总根数
-    total_outbound_m3: float = 0.0      # 出库总体积
-    batches: int = 0                    # 批次数
+    total_inbound_logs: int = 0  # 入库总根数
+    total_inbound_m3: float = 0.0  # 入库总体积
+    total_outbound_logs: int = 0  # 出库总根数
+    total_outbound_m3: float = 0.0  # 出库总体积
+    batches: int = 0  # 批次数
 
 
 class FactorySummary(BaseModel):
     """工厂加工汇总。"""
-    soak_pool_logs: int = 0             # 入池根数
-    soak_pool_m3: float = 0.0           # 入池体积
-    slicing_logs: int = 0               # 上机根数
-    slicing_output_m2: float = 0.0      # 刨切产出 m²
-    packing_pieces: int = 0             # 打包片数
-    packing_area_m2: float = 0.0        # 打包面积 m²
-    packing_packages: int = 0           # 打包包数
+    soak_pool_logs: int = 0  # 入池根数
+    soak_pool_m3: float = 0.0  # 入池体积
+    slicing_logs: int = 0  # 上机根数
+    slicing_output_m2: float = 0.0  # 刨切产出 m²
+    packing_pieces: int = 0  # 打包片数
+    packing_area_m2: float = 0.0  # 打包面积 m²
+    packing_packages: int = 0  # 打包包数
 
 
 class OverallSummary(BaseModel):
