@@ -217,7 +217,7 @@ def _show_splash(base: Path) -> tuple[Any, Any]:
     # ── 图标 + 标题 + 作者（居中） ──
     icon_size = 88
     group_gap = 28
-    center_y = sh * 0.42
+    center_y = sh * 0.5
 
     # 精确测量标题文字宽度
     import tkinter.font as tkfont
