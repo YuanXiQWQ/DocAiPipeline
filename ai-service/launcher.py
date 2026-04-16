@@ -478,12 +478,69 @@ def main() -> None:
             shutdown_event.set()
 
         def _bring_to_front_win32() -> None:
-            """等待窗口就绪后前置。"""
+            """等待窗口就绪后通过 Win32 API 强制前置。"""
             try:
-                time.sleep(0.8)
-                if _wv_window is not None:
-                    _wv_window.restore()
-            except (AttributeError, RuntimeError, OSError):
+                time.sleep(1.0)
+                if _wv_window is None:
+                    return
+                import ctypes
+                from ctypes import wintypes, WinDLL
+
+                user32 = WinDLL("user32", use_last_error=True)
+                kernel32 = WinDLL("kernel32", use_last_error=True)
+                pid = os.getpid()
+                target_hwnd = None
+
+                # 遍历所有顶级窗口，找到属于当前进程且标题含 APP_NAME 的窗口
+                WNDENUMPROC = ctypes.WINFUNCTYPE(  # noqa: N806
+                    wintypes.BOOL, wintypes.HWND, wintypes.LPARAM,
+                )
+
+                def _enum_cb(hwnd: Any, _lp: Any) -> bool:
+                    nonlocal target_hwnd
+                    wnd_pid = wintypes.DWORD()
+                    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(wnd_pid))
+                    if wnd_pid.value == pid and user32.IsWindowVisible(hwnd):
+                        length = user32.GetWindowTextLengthW(hwnd)
+                        if length > 0:
+                            buf = ctypes.create_unicode_buffer(length + 1)
+                            user32.GetWindowTextW(hwnd, buf, length + 1)
+                            if APP_NAME in buf.value:
+                                target_hwnd = hwnd
+                                return False
+                    return True
+
+                user32.EnumWindows(WNDENUMPROC(_enum_cb), 0)
+                if not target_hwnd:
+                    return
+
+                # 获取前台窗口线程和目标窗口线程
+                fg_hwnd = user32.GetForegroundWindow()
+                fg_tid = user32.GetWindowThreadProcessId(fg_hwnd, None)
+                cur_tid = kernel32.GetCurrentThreadId()
+                target_tid = user32.GetWindowThreadProcessId(target_hwnd, None)
+
+                # 将当前线程附加到前台窗口线程，获取前台设置权限
+                attached_fg = False
+                attached_target = False
+                if fg_tid != cur_tid:
+                    attached_fg = bool(user32.AttachThreadInput(cur_tid, fg_tid, True))
+                if target_tid != cur_tid:
+                    attached_target = bool(user32.AttachThreadInput(cur_tid, target_tid, True))
+
+                try:
+                    # 模拟按键释放前台锁
+                    user32.keybd_event(0, 0, 2, 0)  # KEYEVENTF_KEYUP
+                    user32.ShowWindow(target_hwnd, 9)  # SW_RESTORE
+                    user32.BringWindowToTop(target_hwnd)
+                    user32.SetForegroundWindow(target_hwnd)
+                    user32.SetFocus(target_hwnd)
+                finally:
+                    if attached_fg:
+                        user32.AttachThreadInput(cur_tid, fg_tid, False)
+                    if attached_target:
+                        user32.AttachThreadInput(cur_tid, target_tid, False)
+            except (AttributeError, RuntimeError, OSError, ValueError):
                 pass
 
         assert _wv_window is not None
