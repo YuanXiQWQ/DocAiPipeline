@@ -211,6 +211,7 @@
   "settings.update_current": "Trenutna verzija",
   "settings.about": "O programu",
   "settings.repo": "Repozitorijum projekta",
+  "settings.license": "Licenca: AGPL v3.0",
 
   "field.document_type": "Tip dokumenta",
   "field.declaration_number": "Broj deklaracije",

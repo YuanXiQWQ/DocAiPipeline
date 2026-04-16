@@ -166,7 +166,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
     }, [apiKey, doSave]);
 
     return (
-        <div className="max-w-xl space-y-6">
+        <div className="max-w-xl mx-auto space-y-6">
             <div className="flex items-center gap-2 mb-2">
                 <SettingsIcon className="w-6 h-6 text-slate-600"/>
                 <h2 className="text-xl font-semibold text-slate-800">{t("settings.title")}</h2>
@@ -564,6 +564,18 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                             >
                                 <ExternalLink className="w-3.5 h-3.5"/>
                                 {t("settings.repo")}
+                            </a>
+                            <span className="text-slate-300 mx-1.5">|</span>
+                            <a
+                                href={getCurrentLocale() === "zh-CN"
+                                    ? "https://gnu.ac.cn/licenses/agpl-3.0.html#license-text"
+                                    : "https://www.gnu.org/licenses/agpl-3.0.en.html"}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 text-primary-600 hover:text-primary-800 hover:underline"
+                            >
+                                <ExternalLink className="w-3.5 h-3.5"/>
+                                {t("settings.license")}
                             </a>
                         </div>
                         {versionInfo && !versionInfo.has_update && (

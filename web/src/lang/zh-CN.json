@@ -211,6 +211,7 @@
   "settings.update_current": "当前版本",
   "settings.about": "关于",
   "settings.repo": "项目仓库",
+  "settings.license": "许可证: AGPL v3.0",
 
   "field.document_type": "文档类型",
   "field.declaration_number": "报关单号",
