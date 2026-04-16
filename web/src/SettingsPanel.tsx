@@ -3,6 +3,7 @@ import {
     Settings as SettingsIcon,
     Eye,
     EyeOff,
+    Download,
     ExternalLink,
     Save,
     Loader2,
@@ -25,11 +26,16 @@ import {
     setCloseBehavior as apiSetCloseBehavior,
     resetWindow as apiResetWindow,
     checkUpdate,
+    getAutoUpdate,
+    setAutoUpdate as apiSetAutoUpdate,
+    getUpdateStatus,
+    triggerUpdateDownload,
     extractErrorMessage,
     type UserSettings,
     type ModelInfo,
     type VersionInfo,
     type CloseBehavior,
+    type UpdateStatus,
 } from "./api";
 import {getCurrentLocale, setLocale, LOCALE_OPTIONS, useT, type Locale} from "./i18n";
 
@@ -73,6 +79,10 @@ export default function SettingsPanel({onSettingsChange}: Props) {
     const [updateLoading, setUpdateLoading] = useState(false);
     const [updateError, setUpdateError] = useState<string | null>(null);
 
+    // 自动更新
+    const [autoUpdate, setAutoUpdateState] = useState(false);
+    const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+
     // 加载设置
     useEffect(() => {
         setLoading(true);
@@ -83,8 +93,10 @@ export default function SettingsPanel({onSettingsChange}: Props) {
             getPlatform().catch(() => ({desktop: false, version: ""})),
             getAutostart().catch(() => ({enabled: false})),
             getCloseBehavior().catch(() => ({behavior: "minimize_to_tray" as CloseBehavior})),
+            getAutoUpdate().catch(() => ({enabled: false})),
+            getUpdateStatus().catch(() => null),
         ])
-            .then(([res, platformRes, autostartRes, closeBehaviorRes]) => {
+            .then(([res, platformRes, autostartRes, closeBehaviorRes, autoUpdateRes, updateStatusRes]) => {
                 setCurrentSettings(res.settings);
                 setModels(res.available_models);
                 setSelectedModel(res.settings.openai_model);
@@ -94,6 +106,8 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                 setAppVersion(platformRes.version);
                 setAutostartState(autostartRes.enabled);
                 setCloseBehaviorState(closeBehaviorRes.behavior);
+                setAutoUpdateState(autoUpdateRes.enabled);
+                if (updateStatusRes) setUpdateStatus(updateStatusRes);
             })
             .catch((err) => setError(extractErrorMessage(err)))
             .finally(() => setLoading(false));
@@ -368,6 +382,34 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                     <CheckCircle className="w-3.5 h-3.5"/> {resetMsg}
                                 </p>
                             )}
+
+                            {/* 自动更新 */}
+                            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+                                <div className="flex items-center gap-3">
+                                    <RefreshCw className="w-5 h-5 text-slate-500"/>
+                                    <div>
+                                        <p className="text-sm font-medium text-slate-700">{t("settings.auto_update")}</p>
+                                        <p className="text-xs text-slate-400">{t("settings.auto_update_desc")}</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            const res = await apiSetAutoUpdate(!autoUpdate);
+                                            setAutoUpdateState(res.enabled);
+                                        } catch (err) { setError(extractErrorMessage(err)); }
+                                    }}
+                                    className={`relative w-11 h-6 rounded-full transition-colors ${
+                                        autoUpdate ? "bg-blue-600" : "bg-slate-300"
+                                    }`}
+                                >
+                                    <span
+                                        className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                                            autoUpdate ? "translate-x-5" : ""
+                                        }`}
+                                    />
+                                </button>
+                            </div>
                         </div>
                         )}
 
@@ -457,19 +499,34 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                             </p>
                         )}
                         {versionInfo?.has_update && (
-                            <div className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2">
-                                <p className="text-sm text-blue-700">
-                                    {t("settings.update_available").replace("{version}", versionInfo.latest ?? "")}
-                                </p>
-                                <a
-                                    href={versionInfo.release_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
-                                >
-                                    {t("settings.update_go")}
-                                    <ExternalLink className="w-3.5 h-3.5"/>
-                                </a>
+                            <div className="bg-blue-50 rounded-lg px-3 py-2 space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-sm text-blue-700">
+                                        {t("settings.update_available").replace("{version}", versionInfo.latest ?? "")}
+                                    </p>
+                                    <button
+                                        onClick={async () => {
+                                            await triggerUpdateDownload();
+                                            const s = await getUpdateStatus();
+                                            setUpdateStatus(s);
+                                        }}
+                                        disabled={updateStatus?.status === "downloading"}
+                                        className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 disabled:opacity-50"
+                                    >
+                                        {updateStatus?.status === "downloading" ? (
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin"/>
+                                        ) : (
+                                            <Download className="w-3.5 h-3.5"/>
+                                        )}
+                                        {updateStatus?.status === "downloading" ? `${updateStatus.progress}%` : t("settings.update_go")}
+                                    </button>
+                                </div>
+                                {updateStatus?.status === "ready" && (
+                                    <p className="text-xs text-emerald-600 flex items-center gap-1">
+                                        <CheckCircle className="w-3.5 h-3.5"/>
+                                        {updateStatus.message}
+                                    </p>
+                                )}
                             </div>
                         )}
                         {updateError && (

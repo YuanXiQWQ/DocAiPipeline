@@ -189,6 +189,8 @@
   "settings.reset_window": "Reset Window Size",
   "settings.reset_window_desc": "Restore default window dimensions (takes effect after restart)",
   "settings.reset_window_btn": "Reset",
+  "settings.auto_update": "Auto Update",
+  "settings.auto_update_desc": "Check and download updates on startup, apply after restart",
   "settings.update": "Check for Updates",
   "settings.update_checking": "Checking…",
   "settings.update_latest": "You are on the latest version",

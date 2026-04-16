@@ -310,14 +310,134 @@ def _is_newer(latest: str, current: str) -> bool:
     try:
         from packaging.version import Version
         return Version(latest) > Version(current)
-    except Exception:
-        # 回退简单元组比较
-        def _parts(v: str) -> tuple[int, ...]:
-            return tuple(int(x) for x in v.split(".") if x.isdigit())
-        try:
-            return _parts(latest) > _parts(current)
-        except Exception:
-            return latest != current
+    except (ImportError, ValueError, TypeError):
+        pass
+    # 回退简单元组比较
+    def _parts(v: str) -> tuple[int, ...]:
+        return tuple(int(x) for x in v.split(".") if x.isdigit())
+    try:
+        return _parts(latest) > _parts(current)
+    except (ValueError, TypeError):
+        return latest != current
+
+
+# ------------------------------------------------------------------
+# 自动更新（后台下载 + 重启时覆盖）
+# ------------------------------------------------------------------
+
+# 更新状态：idle / downloading / ready / error
+_update_state: dict = {"status": "idle", "progress": 0, "message": "", "version": ""}
+_UPDATE_DIR = "update_staging"
+
+
+@app.get("/api/auto-update")
+async def get_auto_update():
+    """获取自动更新偏好。"""
+    data = _load_desktop_prefs()
+    return {"enabled": data.get("auto_update", False)}
+
+
+@app.put("/api/auto-update")
+async def set_auto_update(body: dict):
+    """设置自动更新偏好。"""
+    enabled = body.get("enabled", False)
+    data = _load_desktop_prefs()
+    data["auto_update"] = bool(enabled)
+    _save_desktop_prefs(data)
+    return {"enabled": data["auto_update"]}
+
+
+@app.get("/api/update/status")
+async def get_update_status():
+    """获取当前更新状态。"""
+    return _update_state.copy()
+
+
+@app.post("/api/update/download")
+async def trigger_update_download():
+    """触发后台下载最新版本。"""
+    import asyncio
+    if _update_state["status"] == "downloading":
+        return {"message": "正在下载中"}
+    # 先检查是否有更新
+    version_info = await check_version()
+    if not version_info.get("has_update"):
+        return {"message": "已是最新版本"}
+
+    # 后台下载
+    asyncio.create_task(_download_update())
+    return {"message": "开始下载更新"}
+
+
+async def _download_update() -> None:
+    """后台下载最新 Release 的 zip 文件到 update_staging/。"""
+    import httpx
+    import zipfile
+
+    _update_state["status"] = "downloading"
+    _update_state["progress"] = 0
+    _update_state["message"] = "正在获取更新信息…"
+    try:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            # 获取最新 Release
+            resp = await client.get(
+                f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
+                headers={"Accept": "application/vnd.github.v3+json"},
+            )
+            if resp.status_code != 200:
+                _update_state.update(status="error", message="获取 Release 信息失败")
+                return
+            data = resp.json()
+            tag = data.get("tag_name", "").lstrip("v")
+            _update_state["version"] = tag
+
+            # 查找 zip 资产
+            assets: list[dict] = data.get("assets", [])
+            zip_asset: dict | None = next(
+                (a for a in assets if str(a.get("name", "")).endswith(".zip")),
+                None,
+            )
+            if zip_asset is None:
+                _update_state.update(status="error", message="未找到可下载的 zip 文件")
+                return
+
+            download_url = str(zip_asset["browser_download_url"])
+            total_size = int(zip_asset.get("size", 0))
+
+            # 准备目录
+            staging = Path(_UPDATE_DIR)
+            staging.mkdir(parents=True, exist_ok=True)
+            asset_name = str(zip_asset["name"])
+            zip_path = staging / asset_name
+
+            # 流式下载
+            _update_state["message"] = f"正在下载 {asset_name}…"
+            async with client.stream("GET", download_url) as stream:
+                downloaded = 0
+                with open(zip_path, "wb") as f:
+                    async for chunk in stream.aiter_bytes(chunk_size=65536):
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0:
+                            _update_state["progress"] = int(downloaded * 100 / total_size)
+
+            # 解压到 staging/extracted/
+            extract_dir = staging / "extracted"
+            if extract_dir.exists():
+                shutil.rmtree(extract_dir)
+            with zipfile.ZipFile(str(zip_path), "r") as zf:
+                zf.extractall(str(extract_dir))
+            zip_path.unlink()  # 删除 zip，只保留解压结果
+
+            _update_state.update(
+                status="ready",
+                progress=100,
+                message=f"更新 {tag} 已就绪，将在应用重启后生效",
+            )
+            logger.info(f"更新 {tag} 已下载就绪: {extract_dir}")
+    except (OSError, httpx.HTTPError, zipfile.BadZipFile, KeyError) as e:
+        logger.warning(f"下载更新失败: {e}")
+        _update_state.update(status="error", message=f"下载失败: {e}")
 
 
 # ------------------------------------------------------------------

@@ -35,13 +35,16 @@ import {
     extractErrorMessage,
     fillExcel,
     type FillResult,
+    getPlatform,
     getScanDevices,
     getSettings,
+    getUpdateStatus,
     healthCheck,
     processBatch,
     type ProcessResult,
     scanAcquire,
     type ScannerDevice,
+    type UpdateStatus,
 } from "./api";
 
 /* 文档类型图标映射 */
@@ -95,6 +98,9 @@ export default function App() {
     const [needsSetup, setNeedsSetup] = useState(false);
     const batchAbortRef = useRef<{ abort: () => void } | null>(null);
 
+    /* 更新通知 toast */
+    const [updateToast, setUpdateToast] = useState<UpdateStatus | null>(null);
+
     /* 扫描仪状态 */
     const [scanAvailable, setScanAvailable] = useState(false);
     const [scanDevices, setScanDevices] = useState<ScannerDevice[]>([]);
@@ -120,6 +126,26 @@ export default function App() {
                 }
             })
             .catch(() => setBackendOk(false));
+        // 桌面端：轮询更新状态
+        getPlatform()
+            .then((p) => {
+                if (!p.desktop) return;
+                const poll = setInterval(() => {
+                    getUpdateStatus()
+                        .then((s) => {
+                            if (s.status === "ready" || s.status === "downloading") {
+                                setUpdateToast(s);
+                            }
+                            if (s.status === "ready" || s.status === "error" || s.status === "idle") {
+                                clearInterval(poll);
+                            }
+                        })
+                        .catch(() => clearInterval(poll));
+                }, 5000);
+                // 60秒后停止轮询
+                setTimeout(() => clearInterval(poll), 60000);
+            })
+            .catch(() => {});
         // 检测扫描仪可用性
         getScanDevices()
             .then((res) => {
@@ -452,6 +478,35 @@ export default function App() {
             <footer className="text-center text-sm text-slate-400 py-6 mt-auto">
                 {t("footer.powered")} DocAI Pipeline &copy; {new Date().getFullYear()}
             </footer>
+
+            {/* ===== 更新通知 toast（右下角） ===== */}
+            {updateToast && (updateToast.status === "ready" || updateToast.status === "downloading") && (
+                <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-white border border-slate-200 rounded-xl shadow-lg p-4 flex items-start gap-3">
+                    {updateToast.status === "downloading" ? (
+                        <Loader2 className="w-5 h-5 text-blue-500 animate-spin shrink-0 mt-0.5"/>
+                    ) : (
+                        <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5"/>
+                    )}
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-800">
+                            {updateToast.status === "downloading"
+                                ? `${t("settings.update_checking")} ${updateToast.progress}%`
+                                : updateToast.message}
+                        </p>
+                        {updateToast.status === "downloading" && (
+                            <div className="w-full h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden">
+                                <div
+                                    className="h-full bg-blue-500 rounded-full transition-all"
+                                    style={{width: `${updateToast.progress}%`}}
+                                />
+                            </div>
+                        )}
+                    </div>
+                    <button onClick={() => setUpdateToast(null)} className="text-slate-400 hover:text-slate-600">
+                        <X className="w-4 h-4"/>
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

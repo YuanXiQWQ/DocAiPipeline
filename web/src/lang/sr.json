@@ -189,6 +189,8 @@
   "settings.reset_window": "Resetuj veličinu prozora",
   "settings.reset_window_desc": "Vrati podrazumevane dimenzije (primenjuje se nakon restarta)",
   "settings.reset_window_btn": "Resetuj",
+  "settings.auto_update": "Automatsko ažuriranje",
+  "settings.auto_update_desc": "Proveri i preuzmi ažuriranja pri pokretanju, primeni nakon restarta",
   "settings.update": "Proveri ažuriranja",
   "settings.update_checking": "Proveravam…",
   "settings.update_latest": "Imate najnoviju verziju",

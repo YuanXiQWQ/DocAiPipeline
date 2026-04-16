@@ -384,6 +384,34 @@ export async function checkUpdate(): Promise<VersionInfo> {
     return data;
 }
 
+/* 自动更新（桌面专属） */
+export async function getAutoUpdate(): Promise<{ enabled: boolean }> {
+    const {data} = await api.get<{ enabled: boolean }>("/api/auto-update");
+    return data;
+}
+
+export async function setAutoUpdate(enabled: boolean): Promise<{ enabled: boolean }> {
+    const {data} = await api.put<{ enabled: boolean }>("/api/auto-update", {enabled});
+    return data;
+}
+
+export interface UpdateStatus {
+    status: "idle" | "downloading" | "ready" | "error";
+    progress: number;
+    message: string;
+    version: string;
+}
+
+export async function getUpdateStatus(): Promise<UpdateStatus> {
+    const {data} = await api.get<UpdateStatus>("/api/update/status");
+    return data;
+}
+
+export async function triggerUpdateDownload(): Promise<{ message: string }> {
+    const {data} = await api.post<{ message: string }>("/api/update/download");
+    return data;
+}
+
 /* 扫描仪 */
 export interface ScannerDevice {
     device_id: string;

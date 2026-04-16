@@ -189,6 +189,8 @@
   "settings.reset_window": "重置窗口大小",
   "settings.reset_window_desc": "恢复为默认窗口尺寸（重启后生效）",
   "settings.reset_window_btn": "重置",
+  "settings.auto_update": "自动更新",
+  "settings.auto_update_desc": "启动时自动检测并下载新版本，重启后自动应用",
   "settings.update": "检查更新",
   "settings.update_checking": "正在检查…",
   "settings.update_latest": "已是最新版本",

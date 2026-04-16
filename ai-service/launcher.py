@@ -165,6 +165,8 @@ def _load_prefs() -> dict:
 # Splash 闪屏窗口（tkinter，无额外依赖）
 # ------------------------------------------------------------------
 
+_splash_state: dict[str, Any] = {}  # 保持 tkinter 对象引用防止 GC
+
 
 def _show_splash(base: Path) -> tuple[Any, Any]:
     """显示启动闪屏窗口，返回 (root, destroy_fn)。"""
@@ -203,10 +205,10 @@ def _show_splash(base: Path) -> tuple[Any, Any]:
         try:
             from PIL import Image, ImageTk
             img = Image.open(str(icon_path))
-            img = img.resize((64, 64), Image.LANCZOS)
+            img = img.resize((64, 64), Image.Resampling.LANCZOS)
             photo = ImageTk.PhotoImage(img)
             canvas.create_image(sw // 2, 70, image=photo)
-        except Exception:
+        except (ImportError, OSError, ValueError):  # Pillow/tkinter 异常
             pass
 
     # 应用名称
@@ -220,10 +222,10 @@ def _show_splash(base: Path) -> tuple[Any, Any]:
         sw // 2, 220, text="正在启动服务…",
         font=("Segoe UI", 9), fill="#c0d8f0")
 
-    # 保持图片引用防止被 GC
-    canvas._photo_ref = photo  # type: ignore[attr-defined]
-    root._loading_text_id = _loading_text  # type: ignore[attr-defined]
-    root._canvas = canvas  # type: ignore[attr-defined]
+    # 保持引用防止被 GC，用 dict 避免访问 protected 成员
+    _splash_state["photo"] = photo
+    _splash_state["loading_text_id"] = _loading_text
+    _splash_state["canvas"] = canvas
 
     root.update()
     return root, lambda: root.destroy()
@@ -231,13 +233,87 @@ def _show_splash(base: Path) -> tuple[Any, Any]:
 
 def _update_splash_text(root: Any, text: str) -> None:
     """更新闪屏窗口的加载提示文字。"""
+    canvas = _splash_state.get("canvas")
+    text_id = _splash_state.get("loading_text_id")
+    if canvas is None or text_id is None:
+        return
     try:
-        canvas = root._canvas  # type: ignore[attr-defined]
-        text_id = root._loading_text_id  # type: ignore[attr-defined]
-        canvas.itemconfig(text_id, text=text)
+        canvas.itemconfig(text_id, text=text)  # type: ignore[union-attr]
         root.update()
-    except Exception:
+    except (AttributeError, RuntimeError):
         pass
+
+
+# ------------------------------------------------------------------
+# 启动时应用已下载的更新
+# ------------------------------------------------------------------
+
+_UPDATE_STAGING = "update_staging"
+
+
+def _apply_pending_update(base: Path) -> None:
+    """如果 update_staging/extracted/ 存在，将其内容覆盖到应用目录。
+
+    覆盖时跳过用户数据文件（*.db, *.json 配置等）。
+    """
+    import shutil as _shutil
+
+    staging = base / _UPDATE_STAGING / "extracted"
+    if not staging.exists():
+        return
+
+    logger.info(f"检测到待应用的更新: {staging}")
+
+    # extracted/ 下可能有一层子目录（如 DocAI-Pipeline/）
+    children = list(staging.iterdir())
+    src = children[0] if len(children) == 1 and children[0].is_dir() else staging
+
+    # 保护列表：不覆盖用户数据
+    _protected = {"user_settings.json", "desktop_prefs.json", "output", "update_staging"}
+
+    try:
+        for item in src.iterdir():
+            if item.name in _protected:
+                continue
+            dest = base / item.name
+            if item.is_dir():
+                if dest.exists():
+                    _shutil.rmtree(dest)
+                _shutil.copytree(str(item), str(dest))
+            else:
+                _shutil.copy2(str(item), str(dest))
+        logger.info("更新文件已覆盖到应用目录")
+    except (OSError, PermissionError) as e:
+        logger.error(f"应用更新失败: {e}")
+
+    # 清理 staging
+    try:
+        _shutil.rmtree(str(base / _UPDATE_STAGING))
+    except OSError:
+        pass
+
+
+# ------------------------------------------------------------------
+# 启动时自动检测更新
+# ------------------------------------------------------------------
+
+
+def _auto_check_and_download(host: str, port: int) -> None:
+    """在后台线程中检测并下载更新。"""
+    import urllib.error
+    import urllib.request
+    import json as _json
+    try:
+        # 等一下让服务完全启动
+        time.sleep(3)
+        # noinspection HttpUrlsUsage
+        url = f"http://{host}:{port}/api/update/download"  # noqa: S310
+        req = urllib.request.Request(url, method="POST")
+        with urllib.request.urlopen(req, timeout=5) as resp:  # noqa: S310
+            result = _json.loads(resp.read())
+            logger.info(f"自动更新检测: {result.get('message', '')}")
+    except (OSError, urllib.error.URLError, ValueError) as e:
+        logger.debug(f"自动更新检测失败: {e}")
 
 
 # ------------------------------------------------------------------
@@ -257,6 +333,9 @@ def main() -> None:
     # 设置工作目录为 ai-service 根（确保 .env / user_settings.json 可被找到）
     base = _base_dir()
     os.chdir(base)
+
+    # 应用上次下载好的更新（覆盖文件）
+    _apply_pending_update(base)
 
     # 显示 Splash 闪屏
     splash_root, splash_destroy = _show_splash(base)
@@ -320,6 +399,15 @@ def main() -> None:
 
     # 关闭 Splash（主窗口即将出现）
     splash_destroy()
+
+    # 自动更新（用户启用时，后台静默检测+下载）
+    if prefs.get("auto_update", False):
+        update_thread = threading.Thread(
+            target=_auto_check_and_download,
+            args=(host, port),
+            daemon=True,
+        )
+        update_thread.start()
 
     if _has_webview:
         # pywebview 原生窗口模式
