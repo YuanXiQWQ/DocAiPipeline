@@ -229,6 +229,11 @@
   "settings.default_volume": "Volume",
   "settings.settlement_units": "Settlement Units",
   "settings.settlement_units_desc": "Values on the dashboard will be converted to and displayed in these units",
+  "settings.export_dir": "Export Path",
+  "settings.export_dir_desc": "Filled Excel files will be saved to this directory",
+  "settings.export_dir_default": "Default: system Downloads folder",
+  "settings.export_dir_browse": "Browse",
+  "settings.export_dir_reset": "Reset",
 
   "field.document_type": "Document Type",
   "field.declaration_number": "Declaration No.",

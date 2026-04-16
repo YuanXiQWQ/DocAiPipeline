@@ -58,6 +58,12 @@ export async function openFile(filename: string): Promise<void> {
     await api.post(`/api/open-file/${encodeURIComponent(filename)}`);
 }
 
+/** 桌面端：弹出文件夹选择对话框 */
+export async function browseFolder(initial?: string): Promise<string> {
+    const {data} = await api.post<{ path: string }>("/api/browse-folder", {initial});
+    return data.path;
+}
+
 export async function healthCheck(): Promise<{ status: string }> {
     const {data} = await api.get("/health");
     return data;
@@ -97,6 +103,8 @@ export interface UserSettings {
     settlement_length_unit: string;
     settlement_area_unit: string;
     settlement_volume_unit: string;
+    export_dir: string;
+    export_dir_resolved: string;
 }
 
 export interface SettingsResponse {

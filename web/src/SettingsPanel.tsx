@@ -24,6 +24,7 @@ import {
     getCloseBehavior,
     setCloseBehavior as apiSetCloseBehavior,
     resetWindow as apiResetWindow,
+    browseFolder,
     checkUpdate,
     getAutoUpdate,
     setAutoUpdate as apiSetAutoUpdate,
@@ -72,6 +73,10 @@ export default function SettingsPanel({onSettingsChange}: Props) {
     const [settlementLengthUnit, setSettlementLengthUnit] = useState("m");
     const [settlementAreaUnit, setSettlementAreaUnit] = useState("m2");
     const [settlementVolumeUnit, setSettlementVolumeUnit] = useState("m3");
+
+    // 导出路径
+    const [exportDir, setExportDir] = useState("");
+    const [exportDirResolved, setExportDirResolved] = useState("");
 
     // 开机自启状态
     const [autostart, setAutostartState] = useState(false);
@@ -131,6 +136,8 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                 if (res.settings.settlement_length_unit) setSettlementLengthUnit(res.settings.settlement_length_unit);
                 if (res.settings.settlement_area_unit) setSettlementAreaUnit(res.settings.settlement_area_unit);
                 if (res.settings.settlement_volume_unit) setSettlementVolumeUnit(res.settings.settlement_volume_unit);
+                if (res.settings.export_dir != null) setExportDir(res.settings.export_dir);
+                if (res.settings.export_dir_resolved) setExportDirResolved(res.settings.export_dir_resolved);
                 setIsDesktop(platformRes.desktop);
                 setAppVersion(platformRes.version);
                 setAutostartState(autostartRes.enabled);
@@ -166,6 +173,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                 settlement_length_unit: settlementLengthUnit,
                 settlement_area_unit: settlementAreaUnit,
                 settlement_volume_unit: settlementVolumeUnit,
+                export_dir: exportDir,
                 ...overrides,
             };
             const res = await updateSettings(body);
@@ -179,13 +187,13 @@ export default function SettingsPanel({onSettingsChange}: Props) {
         } finally {
             setSaving(false);
         }
-    }, [selectedModel, baseUrl, language, defaultCurrency, defaultLengthUnit, defaultAreaUnit, defaultVolumeUnit, settlementCurrency, settlementLengthUnit, settlementAreaUnit, settlementVolumeUnit]);
+    }, [selectedModel, baseUrl, language, defaultCurrency, defaultLengthUnit, defaultAreaUnit, defaultVolumeUnit, settlementCurrency, settlementLengthUnit, settlementAreaUnit, settlementVolumeUnit, exportDir]);
 
-    /** model / language / 单位变化时立即保存 */
+    /** model / language / 单位 / 导出路径变化时立即保存 */
     useEffect(() => {
         if (!initialized.current) return;
         void doSave();
-    }, [selectedModel, language, defaultCurrency, defaultLengthUnit, defaultAreaUnit, defaultVolumeUnit, settlementCurrency, settlementLengthUnit, settlementAreaUnit, settlementVolumeUnit]);
+    }, [selectedModel, language, defaultCurrency, defaultLengthUnit, defaultAreaUnit, defaultVolumeUnit, settlementCurrency, settlementLengthUnit, settlementAreaUnit, settlementVolumeUnit, exportDir]);
 
     /** API Key / Base URL 失焦时保存 */
     const handleBlurSave = useCallback(() => {
@@ -605,6 +613,46 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                         {VOLUME_UNITS.map(u => <option key={u} value={u}>{unitLabel(u)}</option>)}
                                     </select>
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* 导出路径 */}
+                        <div className="p-4 bg-slate-50 rounded-xl space-y-2">
+                            <label className="block text-sm font-medium text-slate-700">
+                                {t("settings.export_dir")}
+                            </label>
+                            <p className="text-xs text-slate-400 mb-2">{t("settings.export_dir_desc")}</p>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="text"
+                                    readOnly
+                                    value={exportDir || exportDirResolved}
+                                    placeholder={t("settings.export_dir_default")}
+                                    className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white text-slate-600 cursor-default"
+                                />
+                                {isDesktop && (
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            try {
+                                                const path = await browseFolder(exportDir || exportDirResolved);
+                                                if (path) setExportDir(path);
+                                            } catch { /* 用户取消 */ }
+                                        }}
+                                        className="px-3 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors whitespace-nowrap"
+                                    >
+                                        {t("settings.export_dir_browse")}
+                                    </button>
+                                )}
+                                {exportDir && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setExportDir("")}
+                                        className="px-3 py-2 text-sm text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors whitespace-nowrap"
+                                    >
+                                        {t("settings.export_dir_reset")}
+                                    </button>
+                                )}
                             </div>
                         </div>
 

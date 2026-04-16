@@ -229,6 +229,11 @@
   "settings.default_volume": "体积",
   "settings.settlement_units": "结算单位",
   "settings.settlement_units_desc": "看板汇总展示时，数值将统一换算为此单位显示",
+  "settings.export_dir": "导出路径",
+  "settings.export_dir_desc": "填充后的 Excel 文件将保存到此目录",
+  "settings.export_dir_default": "默认：系统下载目录",
+  "settings.export_dir_browse": "浏览",
+  "settings.export_dir_reset": "恢复默认",
 
   "field.document_type": "文档类型",
   "field.declaration_number": "报关单号",

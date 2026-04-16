@@ -50,6 +50,13 @@ AVAILABLE_MODELS = [
 ]
 
 
+_USER_CONFIGURABLE_KEYS = (
+    "openai_api_key", "openai_model", "openai_base_url", "language", "export_dir",
+    "default_currency", "default_length_unit", "default_area_unit", "default_volume_unit",
+    "settlement_currency", "settlement_length_unit", "settlement_area_unit", "settlement_volume_unit",
+)
+
+
 class Settings(BaseSettings):
     # OpenAI / VLM 模型配置
     openai_api_key: str = ""
@@ -67,6 +74,7 @@ class Settings(BaseSettings):
     # 路径
     output_dir: str = "output"
     upload_dir: str = "uploads"
+    export_dir: str = ""  # 空串表示使用系统下载目录
 
     # 语言（预留多语言支持）
     language: str = "zh-CN"
@@ -88,6 +96,15 @@ class Settings(BaseSettings):
         "env_file_encoding": "utf-8",
     }
 
+    def get_export_dir(self) -> Path:
+        """返回导出目录：用户配置 > 系统下载目录 > output/。"""
+        if self.export_dir and Path(self.export_dir).is_dir():
+            return Path(self.export_dir)
+        downloads = Path.home() / "Downloads"
+        if downloads.is_dir():
+            return downloads
+        return Path(self.output_dir)
+
     def ensure_dirs(self) -> None:
         """确保必要的目录存在，不存在则创建。"""
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
@@ -101,9 +118,7 @@ class Settings(BaseSettings):
         try:
             data = json.loads(_USER_SETTINGS_FILE.read_text("utf-8"))
             # 只覆盖用户可配置的字段
-            for key in ("openai_api_key", "openai_model", "openai_base_url", "language",
-                    "default_currency", "default_length_unit", "default_area_unit", "default_volume_unit",
-                    "settlement_currency", "settlement_length_unit", "settlement_area_unit", "settlement_volume_unit"):
+            for key in _USER_CONFIGURABLE_KEYS:
                 if key in data and data[key]:
                     setattr(self, key, data[key])
         except (json.JSONDecodeError, OSError):
@@ -119,9 +134,7 @@ class Settings(BaseSettings):
             except (json.JSONDecodeError, OSError):
                 pass
         # 合并更新
-        for key in ("openai_api_key", "openai_model", "openai_base_url", "language",
-                    "default_currency", "default_length_unit", "default_area_unit", "default_volume_unit",
-                    "settlement_currency", "settlement_length_unit", "settlement_area_unit", "settlement_volume_unit"):
+        for key in _USER_CONFIGURABLE_KEYS:
             if key in data:
                 existing[key] = data[key]
                 setattr(self, key, data[key])
@@ -153,6 +166,8 @@ class Settings(BaseSettings):
             "settlement_length_unit": self.settlement_length_unit,
             "settlement_area_unit": self.settlement_area_unit,
             "settlement_volume_unit": self.settlement_volume_unit,
+            "export_dir": self.export_dir,
+            "export_dir_resolved": str(self.get_export_dir()),
         }
 
 

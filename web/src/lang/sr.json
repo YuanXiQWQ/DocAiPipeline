@@ -229,6 +229,11 @@
   "settings.default_volume": "Zapremina",
   "settings.settlement_units": "Obračunske jedinice",
   "settings.settlement_units_desc": "Vrednosti na kontrolnoj tabli će biti konvertovane i prikazane u ovim jedinicama",
+  "settings.export_dir": "Putanja izvoza",
+  "settings.export_dir_desc": "Popunjeni Excel fajlovi će biti sačuvani u ovom direktorijumu",
+  "settings.export_dir_default": "Podrazumevano: sistemski folder za preuzimanja",
+  "settings.export_dir_browse": "Pregledaj",
+  "settings.export_dir_reset": "Resetuj",
 
   "field.document_type": "Tip dokumenta",
   "field.declaration_number": "Broj deklaracije",

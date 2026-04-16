@@ -198,6 +198,31 @@ async def get_platform():
     }
 
 
+@app.post("/api/browse-folder")
+async def browse_folder(body: dict | None = None):
+    """弹出系统文件夹选择对话框，返回用户选择的路径（桌面端专用）。"""
+    if not _is_desktop():
+        raise HTTPException(400, "仅桌面端可用")
+
+    import tkinter as tk
+    from tkinter import filedialog
+
+    initial = (body or {}).get("initial", "")
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    folder = filedialog.askdirectory(
+        title="选择导出目录",
+        initialdir=initial or str(Path.home() / "Downloads"),
+    )
+    root.destroy()
+
+    if not folder:
+        return {"path": ""}
+    return {"path": folder}
+
+
 # ------------------------------------------------------------------
 # 开机自启（桌面专属）
 # ------------------------------------------------------------------

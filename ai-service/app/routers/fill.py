@@ -7,8 +7,10 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -172,7 +174,8 @@ async def fill_excel(
     # 输出路径
     output_dir = Path(settings.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_name = f"filled_{doc_type}_{uuid.uuid4().hex[:6]}.xlsx"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_name = f"filled_{doc_type}_{timestamp}.xlsx"
     output_path = output_dir / output_name
 
     try:
@@ -180,6 +183,15 @@ async def fill_excel(
     except Exception as e:
         logger.error(f"填充失败: {e}")
         raise HTTPException(500, f"填充失败: {e}")
+
+    # 复制到导出目录
+    export_dir = settings.get_export_dir()
+    export_path = export_dir / output_name
+    try:
+        shutil.copy2(str(output_path), str(export_path))
+        logger.info(f"已导出到: {export_path}")
+    except Exception as e:
+        logger.warning(f"复制到导出目录失败: {e}")
 
     return FillResponse(
         download_url=f"/api/download/{output_name}",
@@ -269,7 +281,11 @@ async def open_file(filename: str):
     """在系统文件管理器中打开文件所在目录并选中文件（桌面端专用）。"""
     import subprocess
 
-    file_path = (Path(settings.output_dir) / filename).resolve()
+    export_dir = settings.get_export_dir()
+    file_path = (export_dir / filename).resolve()
+    if not file_path.exists():
+        # 回退到 output 目录
+        file_path = (Path(settings.output_dir) / filename).resolve()
     if not file_path.exists():
         raise HTTPException(404, f"文件不存在: {filename}")
 
