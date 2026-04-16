@@ -130,6 +130,50 @@ async def update_settings(body: dict):
     return {"message": "设置已保存", "settings": settings.get_user_settings()}
 
 
+@app.post("/api/settings/test-key")
+async def test_api_key(body: dict):
+    """测试 API Key 是否有效，向 OpenAI 发送一个最小请求。
+
+    请求体可选字段：
+    - api_key: 要测试的 Key（为空则测试当前已保存的 Key）
+    """
+    import httpx
+
+    key = (body.get("api_key") or "").strip() or settings.openai_api_key
+    if not key:
+        return {"ok": False, "code": "no_key", "message": "API Key 未设置"}
+
+    base = (settings.openai_base_url or "https://api.openai.com/v1").rstrip("/")
+    url = f"{base}/models"
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(url, headers={"Authorization": f"Bearer {key}"})
+
+        if resp.status_code == 200:
+            return {"ok": True, "code": "ok", "message": "API Key 有效"}
+        elif resp.status_code == 401:
+            return {"ok": False, "code": "invalid_key",
+                    "message": "API Key 无效或已过期，请检查 Key 是否正确"}
+        elif resp.status_code == 403:
+            return {"ok": False, "code": "permission_denied",
+                    "message": "API Key 权限不足，请确认 Key 的访问权限"}
+        elif resp.status_code == 429:
+            return {"ok": False, "code": "rate_limit",
+                    "message": "请求过于频繁或账户额度已用完，请检查 OpenAI 账户余额"}
+        else:
+            return {"ok": False, "code": f"http_{resp.status_code}",
+                    "message": f"API 返回异常状态码 {resp.status_code}"}
+    except httpx.ConnectError:
+        return {"ok": False, "code": "connect_error",
+                "message": "无法连接到 API 服务器，请检查网络或 Base URL 设置"}
+    except httpx.TimeoutException:
+        return {"ok": False, "code": "timeout",
+                "message": "连接超时，请检查网络连接或 Base URL 是否正确"}
+    except Exception as e:
+        return {"ok": False, "code": "unknown", "message": f"测试失败：{e}"}
+
+
 # ------------------------------------------------------------------
 # 平台检测（桌面 exe vs Web 部署）
 # ------------------------------------------------------------------

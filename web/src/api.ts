@@ -103,6 +103,17 @@ export async function updateSettings(
     return data;
 }
 
+export interface TestKeyResult {
+    ok: boolean;
+    code: string;
+    message: string;
+}
+
+export async function testApiKey(apiKey?: string): Promise<TestKeyResult> {
+    const {data} = await api.post("/api/settings/test-key", {api_key: apiKey || ""});
+    return data;
+}
+
 /** 文档类型 → i18n key 映射，使用时需配合 t() 翻译 */
 export const DOC_TYPE_KEYS: Record<string, string> = {
     auto: "doc_type.auto",

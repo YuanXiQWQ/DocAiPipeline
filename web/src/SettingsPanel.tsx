@@ -29,6 +29,7 @@ import {
     setAutoUpdate as apiSetAutoUpdate,
     getUpdateStatus,
     triggerUpdateDownload,
+    testApiKey,
     extractErrorMessage,
     type UserSettings,
     type ModelInfo,
@@ -81,6 +82,10 @@ export default function SettingsPanel({onSettingsChange}: Props) {
     // 自动更新
     const [autoUpdate, setAutoUpdateState] = useState(false);
     const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+
+    // API Key 测试
+    const [keyTesting, setKeyTesting] = useState(false);
+    const [keyTestResult, setKeyTestResult] = useState<{ok: boolean; code: string} | null>(null);
 
     // 加载设置
     useEffect(() => {
@@ -209,6 +214,44 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                     )}
                                 </button>
                             </div>
+                            {(apiKey.trim() || currentSettings?.openai_api_key_set) && (
+                                <div className="flex items-center gap-2 mt-2">
+                                    <button
+                                        type="button"
+                                        disabled={keyTesting}
+                                        onClick={async () => {
+                                            setKeyTesting(true);
+                                            setKeyTestResult(null);
+                                            try {
+                                                const res = await testApiKey(apiKey.trim() || undefined);
+                                                setKeyTestResult({ok: res.ok, code: res.code});
+                                            } catch {
+                                                setKeyTestResult({ok: false, code: "unknown"});
+                                            } finally {
+                                                setKeyTesting(false);
+                                            }
+                                        }}
+                                        className="px-3 py-1.5 text-xs font-medium border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                                    >
+                                        {keyTesting ? (
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin"/>
+                                        ) : (
+                                            <RefreshCw className="w-3.5 h-3.5"/>
+                                        )}
+                                        {keyTesting ? t("settings.test_key_testing") : t("settings.test_key")}
+                                    </button>
+                                    {keyTestResult && (
+                                        <span className={`text-xs flex items-center gap-1 ${
+                                            keyTestResult.ok ? "text-emerald-600" : "text-red-600"
+                                        }`}>
+                                            {keyTestResult.ok
+                                                ? <CheckCircle className="w-3.5 h-3.5 shrink-0"/>
+                                                : <AlertCircle className="w-3.5 h-3.5 shrink-0"/>}
+                                            {t(`settings.test_key_${keyTestResult.code}`)}
+                                        </span>
+                                    )}
+                                </div>
+                            )}
                             {!currentSettings?.openai_api_key_set && (
                                 <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
                                     <AlertCircle className="w-3 h-3"/>
