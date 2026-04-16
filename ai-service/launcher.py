@@ -456,7 +456,7 @@ def main() -> None:
             width=win_w,
             height=win_h,
             min_size=(800, 600),
-            confirm_close=True,
+            confirm_close=False,
         )
 
         def _on_closing() -> bool:
