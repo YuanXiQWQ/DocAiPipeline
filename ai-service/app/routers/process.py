@@ -361,9 +361,9 @@ def _process_single_file(
     progress_cb: ProgressCallback | None = None,
 ) -> ProcessResponse:
     """处理单个文件的核心逻辑（同步），通过 progress_cb 报告进度百分比。"""
-    def _report(pct: int, stage: str) -> None:
+    def _report(p: int, s: str) -> None:
         if progress_cb:
-            progress_cb(pct, stage)
+            progress_cb(p, s)
 
     total_pages = len(images)
     actual_type = doc_type_str
@@ -504,8 +504,8 @@ async def process_batch(
             # 线程安全的进度队列
             progress_queue: asyncio.Queue[tuple[int, str]] = asyncio.Queue()
 
-            def on_progress(pct: int, stage: str) -> None:
-                progress_queue.put_nowait((pct, stage))
+            def on_progress(p: int, s: str) -> None:
+                progress_queue.put_nowait((p, s))
 
             yield {
                 "event": "progress",

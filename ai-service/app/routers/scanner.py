@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import shutil
 import uuid
 from pathlib import Path
 from typing import Any
@@ -85,7 +84,7 @@ def _scan_image(device_id: str) -> Path:
     wia = comtypes.client.CreateObject("WIA.DeviceManager")
 
     # 查找目标设备
-    target_info = None
+    target_info: Any = None
     for i in range(1, wia.DeviceInfos.Count + 1):
         info = wia.DeviceInfos.Item(i)
         if info.DeviceID == device_id:
@@ -106,11 +105,12 @@ def _scan_image(device_id: str) -> Path:
     # 执行扫描 — 返回 ImageFile COM 对象
     try:
         image = item.Transfer(_WIA_FORMAT_PNG)
-    except Exception:
+    except Exception as _png_err:  # noqa: BLE001 — COM 调用异常类型不可预测
         # 某些扫描仪不支持 PNG，回退 BMP
+        logger.debug(f"PNG 传输失败，尝试 BMP: {_png_err}")
         try:
             image = item.Transfer(_WIA_FORMAT_BMP)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             raise HTTPException(status_code=500, detail=f"扫描失败: {e}")
 
     # 保存到 upload 目录

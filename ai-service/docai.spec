@@ -74,17 +74,33 @@ hiddenimports = [
     # 新增路由
     "app.routers.history_router",
     "app.routers.summary",
+    "app.routers.scanner",
     "app.history",
+    "app.db",
+    "app.summary_store",
+    "app.summary_writer",
     # 其他
     "encodings",
     "encodings.idna",
+    # 扫描仪 COM
+    "comtypes",
+    "comtypes.client",
 ]
 
 # Python ≤3.12 且 pywebview 已安装时，才打包 webview
 if sys.version_info < (3, 13):
     try:
         import webview  # noqa: F401
-        hiddenimports.append("webview")
+        hiddenimports += [
+            "webview",
+            "webview.platforms",
+            "webview.platforms.edgechromium",
+            "webview.platforms.winforms",
+            "webview.platforms.mshtml",
+            "clr_loader",
+            "clr_loader.ffi",
+            "pythonnet",
+        ]
     except ImportError:
         pass
 

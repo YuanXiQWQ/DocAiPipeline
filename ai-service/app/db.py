@@ -10,7 +10,6 @@ import json
 import sqlite3
 import threading
 from pathlib import Path
-from typing import Any
 
 from loguru import logger
 
@@ -23,7 +22,7 @@ from app.config import settings
 _local = threading.local()
 
 
-def _db_path() -> Path:
+def db_path() -> Path:
     d = Path(settings.output_dir)
     d.mkdir(parents=True, exist_ok=True)
     return d / "docai.db"
@@ -31,13 +30,14 @@ def _db_path() -> Path:
 
 def get_conn() -> sqlite3.Connection:
     """获取当前线程的 SQLite 连接（懒加载）。"""
-    conn: sqlite3.Connection | None = getattr(_local, "conn", None)
-    if conn is None:
-        conn = sqlite3.connect(str(_db_path()), check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA foreign_keys=ON")
-        _local.conn = conn
+    existing = getattr(_local, "conn", None)
+    if existing is not None:
+        return existing  # type: ignore[return-value]
+    conn = sqlite3.connect(str(db_path()), check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    _local.conn = conn
     return conn
 
 
@@ -104,7 +104,7 @@ def init_db() -> None:
     conn = get_conn()
     conn.executescript(_SCHEMA_SQL)
     conn.commit()
-    logger.info(f"SQLite 数据库已初始化: {_db_path()}")
+    logger.info(f"SQLite 数据库已初始化: {db_path()}")
     _migrate_json_data(conn)
 
 
