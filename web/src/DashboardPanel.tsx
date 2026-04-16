@@ -33,6 +33,12 @@ import {
     type HistorySummary,
 } from "./api";
 import {useT} from "./i18n";
+import {
+    type LengthUnit, type AreaUnit, type VolumeUnit, type CurrencyUnit, type UnitConfig,
+    LENGTH_UNITS, AREA_UNITS, VOLUME_UNITS, CURRENCY_UNITS, CURRENCY_KEYS,
+    LENGTH_TO_M, AREA_TO_M2, VOL_TO_M3,
+    DEFAULT_UNITS, unitLabel,
+} from "./units";
 
 /* 默认日期范围：今年 */
 function thisYearRange(): [string, string] {
@@ -49,41 +55,11 @@ function fmtNum(v: number): string {
 /* 单位换算系统                                                   */
 /* ============================================================== */
 
-type LengthUnit = "mm" | "cm" | "m" | "in" | "ft";
-type AreaUnit = "mm2" | "cm2" | "m2" | "in2" | "ft2";
-type VolumeUnit = "mm3" | "cm3" | "m3" | "in3" | "ft3";
-type CurrencyUnit = "EUR" | "USD" | "CNY" | "RSD" | "HRK" | "GBP";
-
-interface UnitConfig {
-    length: LengthUnit;
-    area: AreaUnit;
-    volume: VolumeUnit;
-    currency: CurrencyUnit;
-}
-
-const LENGTH_TO_M: Record<LengthUnit, number> = { mm: 0.001, cm: 0.01, m: 1, in: 0.0254, ft: 0.3048 };
-const AREA_TO_M2: Record<AreaUnit, number> = { mm2: 1e-6, cm2: 1e-4, m2: 1, in2: 0.00064516, ft2: 0.092903 };
-const VOL_TO_M3: Record<VolumeUnit, number> = { mm3: 1e-9, cm3: 1e-6, m3: 1, in3: 1.6387e-5, ft3: 0.0283168 };
-
-const LENGTH_UNITS: LengthUnit[] = ["mm", "cm", "m", "in", "ft"];
-const AREA_UNITS: AreaUnit[] = ["mm2", "cm2", "m2", "in2", "ft2"];
-const VOLUME_UNITS: VolumeUnit[] = ["mm3", "cm3", "m3", "in3", "ft3"];
-const CURRENCY_UNITS: CurrencyUnit[] = ["EUR", "USD", "CNY", "RSD", "HRK", "GBP"];
-
-const DEFAULT_UNITS: UnitConfig = { length: "m", area: "m2", volume: "m3", currency: "EUR" };
-
-/* ASCII key → 显示用上标符号 */
-const UNIT_LABEL: Record<string, string> = {
-    mm2: "mm\u00b2", cm2: "cm\u00b2", m2: "m\u00b2", in2: "in\u00b2", ft2: "ft\u00b2",
-    mm3: "mm\u00b3", cm3: "cm\u00b3", m3: "m\u00b3", in3: "in\u00b3", ft3: "ft\u00b3",
-};
-function unitLabel(u: string): string { return UNIT_LABEL[u] ?? u; }
-
 /** 单位换算：将原始值从原始单位转换到目标单位（仅视觉展示） */
 function convertUnit(value: number, fromUnit: string, units: UnitConfig, rates: Record<string, number>): { value: number; unit: string } {
     const fu = fromUnit.toLowerCase().trim();
     // 货币
-    if (["eur", "usd", "cny", "rsd", "hrk", "gbp"].includes(fu)) {
+    if (CURRENCY_KEYS.has(fu)) {
         if (units.currency === fromUnit.toUpperCase()) return {value, unit: units.currency};
         const fromKey = fu;
         const toKey = units.currency.toLowerCase();
@@ -177,14 +153,15 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
     const [newUnit, setNewUnit] = useState(unit);
 
     /* 根据单位类型提供可选单位列表 */
-    const isCurrency = ["eur", "usd", "cny", "rsd", "hrk", "gbp"].includes(unit.toLowerCase());
-    const isVolume = ["m3", "cm3", "mm3", "in3", "ft3"].includes(unit.toLowerCase());
-    const isArea = ["m2", "cm2", "mm2", "in2", "ft2"].includes(unit.toLowerCase());
-    const isLength = ["mm", "cm", "m", "in", "ft"].includes(unit.toLowerCase());
+    const ul = unit.toLowerCase();
+    const isCurrency = CURRENCY_KEYS.has(ul);
+    const isVolume = (VOLUME_UNITS as readonly string[]).includes(ul);
+    const isArea = (AREA_UNITS as readonly string[]).includes(ul);
+    const isLength = (LENGTH_UNITS as readonly string[]).includes(ul);
     const unitOptions: string[] = isCurrency ? [...CURRENCY_UNITS]
-        : isVolume ? ["m3", "cm3", "mm3", "in3", "ft3"]
-        : isArea ? ["m2", "cm2", "mm2", "in2", "ft2"]
-        : isLength ? ["mm", "cm", "m", "in", "ft"]
+        : isVolume ? [...VOLUME_UNITS]
+        : isArea ? [...AREA_UNITS]
+        : isLength ? [...LENGTH_UNITS]
         : [unit];
 
     const fetchEntries = useCallback(() => {

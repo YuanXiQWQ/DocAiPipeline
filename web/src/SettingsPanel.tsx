@@ -38,6 +38,7 @@ import {
     type UpdateStatus,
 } from "./api";
 import {getCurrentLocale, setLocale, LOCALE_OPTIONS, useT, type Locale} from "./i18n";
+import {CURRENCY_UNITS, LENGTH_UNITS, AREA_UNITS, VOLUME_UNITS, unitLabel} from "./units";
 
 interface Props {
     onSettingsChange?: () => void;
@@ -524,28 +525,28 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                     <label className="block text-xs text-slate-500 mb-1">{t("settings.default_currency")}</label>
                                     <select value={defaultCurrency} onChange={e => setDefaultCurrency(e.target.value)}
                                             className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
-                                        {["EUR", "USD", "CNY", "RSD", "HRK", "GBP"].map(c => <option key={c} value={c}>{c}</option>)}
+                                        {CURRENCY_UNITS.map(c => <option key={c} value={c}>{c}</option>)}
                                     </select>
                                 </div>
                                 <div>
                                     <label className="block text-xs text-slate-500 mb-1">{t("settings.default_length")}</label>
                                     <select value={defaultLengthUnit} onChange={e => setDefaultLengthUnit(e.target.value)}
                                             className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
-                                        {["mm", "cm", "m", "in", "ft"].map(u => <option key={u} value={u}>{u}</option>)}
+                                        {LENGTH_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                                     </select>
                                 </div>
                                 <div>
                                     <label className="block text-xs text-slate-500 mb-1">{t("settings.default_area")}</label>
                                     <select value={defaultAreaUnit} onChange={e => setDefaultAreaUnit(e.target.value)}
                                             className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
-                                        {["m2", "cm2", "mm2", "in2", "ft2"].map(u => <option key={u} value={u}>{u === "m2" ? "m²" : u === "cm2" ? "cm²" : u === "mm2" ? "mm²" : u === "in2" ? "in²" : "ft²"}</option>)}
+                                        {AREA_UNITS.map(u => <option key={u} value={u}>{unitLabel(u)}</option>)}
                                     </select>
                                 </div>
                                 <div>
                                     <label className="block text-xs text-slate-500 mb-1">{t("settings.default_volume")}</label>
                                     <select value={defaultVolumeUnit} onChange={e => setDefaultVolumeUnit(e.target.value)}
                                             className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
-                                        {["m3", "cm3", "mm3", "in3", "ft3"].map(u => <option key={u} value={u}>{u === "m3" ? "m³" : u === "cm3" ? "cm³" : u === "mm3" ? "mm³" : u === "in3" ? "in³" : "ft³"}</option>)}
+                                        {VOLUME_UNITS.map(u => <option key={u} value={u}>{unitLabel(u)}</option>)}
                                     </select>
                                 </div>
                             </div>

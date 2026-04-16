@@ -62,7 +62,7 @@ Fields to extract:
 - quantity: quantity with unit. Note: on CMR docs, "Zapremina m³" is volume, "Broj koleta" is package count, "Bruto težina kg" is weight — extract volume/package count here, NOT weight
 - unit_price: unit price with currency
 - total_value: total value / final payable amount with currency. Look for "SVEUKUPNO", "Iznos za plaćanje", "Укупно"
-- currency: ISO currency code. Convert: € → EUR, $ → USD, £ → GBP, ¥ → CNY, "Valuta fakture: RSD" → RSD, динар/динара → RSD, kuna/kn → HRK
+- currency: ISO currency code. Convert: € → EUR, $ → USD, £ → GBP, ¥ → CNY, C$ / CA$ / CAD → CAD, "Valuta fakture: RSD" → RSD, динар/динара → RSD, kuna/kn → HRK
 - net_weight: net weight with unit
 - gross_weight: gross weight with unit (kg or other)
 - tariff_code: HS code / tariff number ONLY (6-10 digit numeric codes like 44039100). Do NOT put legal article references (e.g. "ЗРАТ") here
