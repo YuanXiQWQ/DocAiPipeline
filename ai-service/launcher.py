@@ -461,17 +461,16 @@ def main() -> None:
 
         def _on_closing() -> bool:
             """窗口关闭事件：根据用户偏好决定最小化还是退出。"""
-            # 每次关闭时重新读取偏好（用户可能刚改过）
+            if shutdown_event.is_set():
+                return True  # 已在退出流程中（托盘退出等），允许关闭
             _cb = _load_prefs().get("close_behavior", "minimize_to_tray")
             if _cb == "minimize_to_tray":
                 assert _wv_window is not None
                 _wv_window.hide()
+                return False  # 取消关闭，改为隐藏
             else:
-                # exit 模式：直接销毁窗口
                 shutdown_event.set()
-                assert _wv_window is not None
-                _wv_window.destroy()
-            return False  # 始终取消默认确认对话框
+                return True  # 允许 pywebview 正常关闭窗口
 
         def _on_closed() -> None:
             """窗口真正关闭后触发。"""
