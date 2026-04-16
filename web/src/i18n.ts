@@ -21,8 +21,16 @@ const messages: Record<Locale, Record<string, string>> = {
     sr,
 };
 
-/** 当前激活的语言 */
-let _currentLocale: Locale = "zh-CN";
+const _STORAGE_KEY = "docai_locale";
+
+/** 当前激活的语言（从 localStorage 恢复，默认 zh-CN） */
+let _currentLocale: Locale = (() => {
+    try {
+        const stored = localStorage.getItem(_STORAGE_KEY);
+        if (stored && stored in messages) return stored as Locale;
+    } catch { /* SSR / 无痕模式 */ }
+    return "zh-CN";
+})();
 
 /** 语言变更监听器集合 */
 const _listeners: Set<() => void> = new Set();
@@ -35,6 +43,7 @@ export function getCurrentLocale(): Locale {
 export function setLocale(locale: Locale): void {
     if (locale === _currentLocale) return;
     _currentLocale = locale;
+    try { localStorage.setItem(_STORAGE_KEY, locale); } catch { /* 无痕模式 */ }
     _listeners.forEach((fn) => fn());
 }
 

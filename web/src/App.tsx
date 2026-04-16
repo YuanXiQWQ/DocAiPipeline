@@ -22,7 +22,7 @@ import {
     Upload,
     X,
 } from "lucide-react";
-import {useT} from "./i18n";
+import {useT, setLocale, type Locale} from "./i18n";
 import SettingsPanel from "./SettingsPanel";
 import HistoryPanel from "./HistoryPanel";
 import DashboardPanel from "./DashboardPanel";
@@ -120,6 +120,9 @@ export default function App() {
                 return getSettings();
             })
             .then((res) => {
+                if (res.settings.language) {
+                    setLocale(res.settings.language as Locale);
+                }
                 if (!res.settings.openai_api_key_set) {
                     setNeedsSetup(true);
                     navigate("/settings");
@@ -307,7 +310,7 @@ export default function App() {
         if (!fillResult) return;
         try {
             const resp = await fetch(fillResult.download_url);
-            if (!resp.ok) throw new Error(`${resp.status}`);
+            if (!resp.ok) { setError(`下载失败: HTTP ${resp.status}`); return; }
             const blob = await resp.blob();
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");

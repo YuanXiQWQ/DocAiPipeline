@@ -119,6 +119,10 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                 setSelectedModel(res.settings.openai_model);
                 setBaseUrl(res.settings.openai_base_url);
                 setApiKey("");
+                if (res.settings.language) {
+                    setLanguage(res.settings.language as Locale);
+                    setLocale(res.settings.language as Locale);
+                }
                 if (res.settings.default_currency) setDefaultCurrency(res.settings.default_currency);
                 if (res.settings.default_length_unit) setDefaultLengthUnit(res.settings.default_length_unit);
                 if (res.settings.default_area_unit) setDefaultAreaUnit(res.settings.default_area_unit);
