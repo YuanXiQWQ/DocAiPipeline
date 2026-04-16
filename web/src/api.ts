@@ -75,6 +75,7 @@ export interface ModelInfo {
     provider: string;
     pricing_url: string;
     description: string;
+    description_en?: string;
 }
 
 export interface UserSettings {

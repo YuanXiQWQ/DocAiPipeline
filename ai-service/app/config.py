@@ -21,6 +21,7 @@ AVAILABLE_MODELS = [
         "provider": "OpenAI",
         "pricing_url": "https://platform.openai.com/docs/pricing",
         "description": "高性价比，推荐用于日常文档处理",
+        "description_en": "Best value, recommended for daily documents",
     },
     {
         "id": "gpt-4.1",
@@ -28,6 +29,7 @@ AVAILABLE_MODELS = [
         "provider": "OpenAI",
         "pricing_url": "https://platform.openai.com/docs/pricing",
         "description": "最高精度，适合复杂手写识别",
+        "description_en": "Highest accuracy, ideal for complex handwriting",
     },
     {
         "id": "gpt-4o",
@@ -35,6 +37,7 @@ AVAILABLE_MODELS = [
         "provider": "OpenAI",
         "pricing_url": "https://platform.openai.com/docs/pricing",
         "description": "多模态旗舰模型",
+        "description_en": "Multimodal flagship model",
     },
     {
         "id": "gpt-4o-mini",
@@ -42,6 +45,7 @@ AVAILABLE_MODELS = [
         "provider": "OpenAI",
         "pricing_url": "https://platform.openai.com/docs/pricing",
         "description": "轻量多模态，成本最低",
+        "description_en": "Lightweight multimodal, lowest cost",
     },
 ]
 

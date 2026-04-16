@@ -177,6 +177,7 @@
   "settings.language": "Language",
   "settings.saved": "Settings saved",
   "settings.save": "Save Settings",
+  "settings.saving": "Saving…",
   "settings.view_pricing": "View pricing",
   "settings.general": "General",
   "settings.autostart": "Start on Boot",

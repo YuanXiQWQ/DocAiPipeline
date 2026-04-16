@@ -177,6 +177,7 @@
   "settings.language": "界面语言 / Language",
   "settings.saved": "设置已保存",
   "settings.save": "保存设置",
+  "settings.saving": "保存中…",
   "settings.view_pricing": "查看定价",
   "settings.general": "通用",
   "settings.autostart": "开机自启",

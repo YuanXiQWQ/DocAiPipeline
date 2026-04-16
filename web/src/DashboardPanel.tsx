@@ -653,6 +653,13 @@ export default function DashboardPanel() {
             .finally(() => setLoading(false));
     }, [dateFrom, dateTo]);
 
+    /** 后台刷新汇总数据，不触发 loading 状态 */
+    const silentRefresh = useCallback(() => {
+        getSummary(dateFrom, dateTo)
+            .then(setData)
+            .catch(() => {});
+    }, [dateFrom, dateTo]);
+
     const fetchRates = useCallback(() => {
         getExchangeRates("EUR")
             .then(r => { setRates(r.rates); setRatesLive(true); })
@@ -729,7 +736,7 @@ export default function DashboardPanel() {
                     dateFrom={dateFrom}
                     dateTo={dateTo}
                     unit={detailView.unit}
-                    onBack={() => handleBackToMain(() => { setDetailView(null); fetchData(); })}
+                    onBack={() => handleBackToMain(() => { setDetailView(null); silentRefresh(); })}
                 />
             </div>
         )}
@@ -831,17 +838,17 @@ export default function DashboardPanel() {
                                       value={`${data.factory_summary.soak_pool_logs} ${t("dashboard.unit_log")}`}
                                       unit={data.factory_summary.soak_pool_m3 > 0 ? `/ ${fmtNum(cv(data.factory_summary.soak_pool_m3, "m3").value)} ${cv(0, "m3").unit}` : undefined}
                                       color="bg-violet-50 border-violet-200"
-                                      onClick={() => openDetail(t("dashboard.soak_pool"), "soak_pool", "soak_pool_batch", "根")}/>
+                                      onClick={() => openDetail(t("dashboard.soak_pool"), "soak_pool", "soak_pool_batch", t("dashboard.unit_log"))}/>
                             <StatCard icon={<Scissors className="w-5 h-5 text-rose-500"/>} label={t("dashboard.slicing")}
                                       value={`${data.factory_summary.slicing_logs} ${t("dashboard.unit_log")}`}
                                       unit={data.factory_summary.slicing_output_m2 > 0 ? `/ ${fmtNum(cv(data.factory_summary.slicing_output_m2, "m2").value)} ${cv(0, "m2").unit}` : undefined}
                                       color="bg-rose-50 border-rose-200"
-                                      onClick={() => openDetail(t("dashboard.slicing"), "slicing", "slicing_batch", "根")}/>
+                                      onClick={() => openDetail(t("dashboard.slicing"), "slicing", "slicing_batch", t("dashboard.unit_log"))}/>
                             <StatCard icon={<Package className="w-5 h-5 text-teal-500"/>} label={t("dashboard.packing")}
                                       value={`${data.factory_summary.packing_packages} ${t("dashboard.unit_pack")}`}
                                       unit={`/ ${data.factory_summary.packing_pieces} ${t("dashboard.unit_piece")} / ${fmtNum(cv(data.factory_summary.packing_area_m2, "m2").value)} ${cv(0, "m2").unit}`}
                                       color="bg-teal-50 border-teal-200"
-                                      onClick={() => openDetail(t("dashboard.packing"), "packing", "packing_batch", "包")}/>
+                                      onClick={() => openDetail(t("dashboard.packing"), "packing", "packing_batch", t("dashboard.unit_pack"))}/>
                         </div>
                     </div>
 

@@ -1,11 +1,10 @@
-import {useState, useEffect, useCallback} from "react";
+import {useState, useEffect, useCallback, useRef} from "react";
 import {
     Settings as SettingsIcon,
     Eye,
     EyeOff,
     Download,
     ExternalLink,
-    Save,
     Loader2,
     CheckCircle,
     AlertCircle,
@@ -110,10 +109,17 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                 if (updateStatusRes) setUpdateStatus(updateStatusRes);
             })
             .catch((err) => setError(extractErrorMessage(err)))
-            .finally(() => setLoading(false));
+            .finally(() => {
+                setLoading(false);
+                requestAnimationFrame(() => { initialized.current = true; });
+            });
     }, []);
 
-    const handleSave = useCallback(async () => {
+    /** 是否已完成初始化（避免加载时触发自动保存） */
+    const initialized = useRef(false);
+
+    const doSave = useCallback(async (overrides: Record<string, string> = {}) => {
+        if (!initialized.current) return;
         setSaving(true);
         setError(null);
         setSaved(false);
@@ -122,15 +128,10 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                 openai_model: selectedModel,
                 openai_base_url: baseUrl,
                 language: language,
+                ...overrides,
             };
-            // 只在用户输入了新 key 时才更新
-            if (apiKey.trim()) {
-                body.openai_api_key = apiKey.trim();
-            }
             const res = await updateSettings(body);
             setCurrentSettings(res.settings);
-            setApiKey("");
-            // 同步前端语言
             setLocale(language);
             setSaved(true);
             onSettingsChange?.();
@@ -140,7 +141,24 @@ export default function SettingsPanel({onSettingsChange}: Props) {
         } finally {
             setSaving(false);
         }
-    }, [apiKey, selectedModel, baseUrl, language]);
+    }, [selectedModel, baseUrl, language]);
+
+    /** model / language 变化时立即保存 */
+    useEffect(() => {
+        if (!initialized.current) return;
+        doSave();
+    }, [selectedModel, language]);
+
+    /** API Key / Base URL 失焦时保存 */
+    const handleBlurSave = useCallback(() => {
+        const overrides: Record<string, string> = {};
+        if (apiKey.trim()) {
+            overrides.openai_api_key = apiKey.trim();
+        }
+        doSave(overrides).then(() => {
+            if (apiKey.trim()) setApiKey("");
+        });
+    }, [apiKey, doSave]);
 
     return (
         <div className="max-w-xl space-y-6">
@@ -171,6 +189,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                     type={showKey ? "text" : "password"}
                                     value={apiKey}
                                     onChange={(e) => setApiKey(e.target.value)}
+                                    onBlur={handleBlurSave}
                                     placeholder={
                                         currentSettings?.openai_api_key_set
                                             ? t("settings.api_key_placeholder")
@@ -232,7 +251,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                         </span>
                                             </div>
                                             <p className="text-xs text-slate-500 mt-0.5">
-                                                {m.description}
+                                                {getCurrentLocale() === "zh-CN" ? m.description : (m.description_en ?? m.description)}
                                             </p>
                                         </div>
                                         <a
@@ -263,6 +282,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                     type="text"
                                     value={baseUrl}
                                     onChange={(e) => setBaseUrl(e.target.value)}
+                                    onBlur={handleBlurSave}
                                     placeholder={t("settings.base_url_placeholder")}
                                     className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
                                 />
@@ -534,21 +554,13 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                         )}
                     </div>
 
-                    {/* 保存按钮 */}
-                    <div className="flex justify-end pt-2">
-                        <button
-                            onClick={handleSave}
-                            disabled={saving}
-                            className="px-6 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
-                        >
-                            {saving ? (
-                                <Loader2 className="w-4 h-4 animate-spin"/>
-                            ) : (
-                                <Save className="w-4 h-4"/>
-                            )}
-                            {t("settings.save")}
-                        </button>
-                    </div>
+                    {/* 自动保存状态指示 */}
+                    {saving && (
+                        <div className="flex items-center gap-2 text-xs text-slate-400 justify-end pt-1">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin"/>
+                            {t("settings.saving")}
+                        </div>
+                    )}
                 </div>
             )}
         </div>
