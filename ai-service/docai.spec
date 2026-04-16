@@ -121,7 +121,6 @@ a = Analysis(
     runtime_hooks=[],
     excludes=[
         # 排除不需要的大包，减小体积
-        "tkinter",
         "matplotlib",
         "scipy",
         "notebook",
