@@ -1,4 +1,4 @@
-import {useState, useEffect, useCallback} from "react";
+import {useState, useEffect, useCallback, useRef} from "react";
 import {
     Clock,
     FileText,
@@ -101,38 +101,57 @@ export default function HistoryPanel({onLoadResult}: HistoryPanelProps) {
     const totalPages = Math.ceil(total / limit);
     const currentPage = Math.floor(offset / limit) + 1;
 
-    // 详情视图
-    if (detail) {
-        return (
-            <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => setDetail(null)}
-                            className="p-1.5 rounded-lg hover:bg-gray-100 transition"
-                        >
-                            <ChevronLeft className="w-5 h-5"/>
-                        </button>
-                        <div>
-                            <h3 className="font-semibold text-gray-900">{detail.filename}</h3>
-                            <p className="text-sm text-gray-500">
-                                {DOC_TYPE_KEYS[detail.doc_type] ? t(DOC_TYPE_KEYS[detail.doc_type]) : detail.doc_type} · {formatTime(detail.timestamp)}
-                            </p>
+    // 列表容器引用，用于保持滚动位置
+    const listRef = useRef<HTMLDivElement>(null);
+    const scrollRef = useRef(0);
+
+    const handleBack = () => {
+        setDetail(null);
+        // 返回列表后恢复滚动位置
+        requestAnimationFrame(() => {
+            window.scrollTo(0, scrollRef.current);
+        });
+    };
+
+    const handleOpenDetail = async (id: string) => {
+        // 进入详情前保存滚动位置
+        scrollRef.current = window.scrollY;
+        await handleDetail(id);
+    };
+
+    return (
+        <>
+            {/* 详情视图 */}
+            {detail && (
+                <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={handleBack}
+                                className="p-1.5 rounded-lg hover:bg-gray-100 transition"
+                            >
+                                <ChevronLeft className="w-5 h-5"/>
+                            </button>
+                            <div>
+                                <h3 className="font-semibold text-gray-900">{detail.filename}</h3>
+                                <p className="text-sm text-gray-500">
+                                    {DOC_TYPE_KEYS[detail.doc_type] ? t(DOC_TYPE_KEYS[detail.doc_type]) : detail.doc_type} · {formatTime(detail.timestamp)}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {onLoadResult && (
+                                <button
+                                    onClick={() => onLoadResult(detail)}
+                                    className="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
+                                >
+                                    {t("history.load")}
+                                </button>
+                            )}
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        {onLoadResult && (
-                            <button
-                                onClick={() => onLoadResult(detail)}
-                                className="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
-                            >
-                                {t("history.load")}
-                            </button>
-                        )}
-                    </div>
-                </div>
 
-                <div>
+                    <div>
                         {/* 元信息 */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                             <div className="bg-gray-50 rounded-lg p-3">
@@ -177,7 +196,8 @@ export default function HistoryPanel({onLoadResult}: HistoryPanelProps) {
                                     if (isFieldList) {
                                         return (
                                             <details key={ri} open={detail.results.length <= 3} className="group">
-                                                <summary className="text-sm font-medium text-gray-600 cursor-pointer mb-2">
+                                                <summary
+                                                    className="text-sm font-medium text-gray-600 cursor-pointer mb-2">
                                                     {t("review.record")} {ri + 1}
                                                 </summary>
                                                 <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -190,7 +210,8 @@ export default function HistoryPanel({onLoadResult}: HistoryPanelProps) {
                                                         </thead>
                                                         <tbody>
                                                         {fields.map((f, fi) => (
-                                                            <tr key={fi} className={fi % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
+                                                            <tr key={fi}
+                                                                className={fi % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
                                                                 <td className="px-3 py-1.5 border-b border-gray-100 text-gray-500 text-xs">{t(`field.${f.field_name}`) !== `field.${f.field_name}` ? `${t(`field.${f.field_name}`)} (${f.field_name})` : String(f.field_name ?? "")}</td>
                                                                 <td className="px-3 py-1.5 border-b border-gray-100 text-gray-900">{String(f.value ?? "—")}</td>
                                                             </tr>
@@ -209,7 +230,8 @@ export default function HistoryPanel({onLoadResult}: HistoryPanelProps) {
                                         );
                                         return (
                                             <details key={ri} open={detail.results.length <= 3} className="group">
-                                                <summary className="text-sm font-medium text-gray-600 cursor-pointer mb-2">
+                                                <summary
+                                                    className="text-sm font-medium text-gray-600 cursor-pointer mb-2">
                                                     {t("review.record")} {ri + 1} — {fields.length} {t("review.rows")}
                                                 </summary>
                                                 <div className="overflow-x-auto border border-gray-200 rounded-lg">
@@ -217,15 +239,18 @@ export default function HistoryPanel({onLoadResult}: HistoryPanelProps) {
                                                         <thead>
                                                         <tr className="bg-gray-50">
                                                             {cols.map(c => (
-                                                                <th key={c} className="px-2 py-1.5 border-b border-gray-200 text-left font-medium text-gray-600 whitespace-nowrap">{t(`field.${c}`) !== `field.${c}` ? `${t(`field.${c}`)} (${c})` : c}</th>
+                                                                <th key={c}
+                                                                    className="px-2 py-1.5 border-b border-gray-200 text-left font-medium text-gray-600 whitespace-nowrap">{t(`field.${c}`) !== `field.${c}` ? `${t(`field.${c}`)} (${c})` : c}</th>
                                                             ))}
                                                         </tr>
                                                         </thead>
                                                         <tbody>
                                                         {fields.slice(0, 50).map((row, rIdx) => (
-                                                            <tr key={rIdx} className={rIdx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
+                                                            <tr key={rIdx}
+                                                                className={rIdx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
                                                                 {cols.map(c => (
-                                                                    <td key={c} className="px-2 py-1 border-b border-gray-100 text-gray-700 whitespace-nowrap">{String(row[c] ?? "")}</td>
+                                                                    <td key={c}
+                                                                        className="px-2 py-1 border-b border-gray-100 text-gray-700 whitespace-nowrap">{String(row[c] ?? "")}</td>
                                                                 ))}
                                                             </tr>
                                                         ))}
@@ -250,7 +275,8 @@ export default function HistoryPanel({onLoadResult}: HistoryPanelProps) {
                                                 <table className="min-w-full text-sm">
                                                     <tbody>
                                                     {keys.map((k, ki) => (
-                                                        <tr key={ki} className={ki % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
+                                                        <tr key={ki}
+                                                            className={ki % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
                                                             <td className="px-3 py-1.5 border-b border-gray-100 text-gray-500 text-xs w-1/3">{t(`field.${k}`) !== `field.${k}` ? `${t(`field.${k}`)} (${k})` : k}</td>
                                                             <td className="px-3 py-1.5 border-b border-gray-100 text-gray-900">{typeof rec[k] === "object" ? JSON.stringify(rec[k]) : String(rec[k] ?? "—")}</td>
                                                         </tr>
@@ -263,23 +289,21 @@ export default function HistoryPanel({onLoadResult}: HistoryPanelProps) {
                                 })}
                             </div>
                         </div>
+                    </div>
                 </div>
-            </div>
-        );
-    }
+            )}
 
-    // 主列表视图
-    return (
-        <div className="space-y-6">
-            <div className="flex items-center gap-3 mb-2">
-                <Clock className="w-6 h-6 text-primary-600"/>
-                <h2 className="text-xl font-semibold text-gray-900">{t("history.title")}</h2>
-                {stats && (
-                    <span className="text-sm text-gray-500">
+            {/* 主列表视图：详情打开时隐藏但不卸载 */}
+            <div ref={listRef} style={{display: detail ? "none" : undefined}} className="space-y-6">
+                <div className="flex items-center gap-3 mb-2">
+                    <Clock className="w-6 h-6 text-primary-600"/>
+                    <h2 className="text-xl font-semibold text-gray-900">{t("history.title")}</h2>
+                    {stats && (
+                        <span className="text-sm text-gray-500">
                         {t("history.total").replace("{n}", String(stats.total_records))} · {t("history.recent").replace("{n}", String(stats.recent_7_days))}
                     </span>
-                )}
-            </div>
+                    )}
+                </div>
 
                 {/* 统计卡片 */}
                 {stats && stats.total_records > 0 && (
@@ -356,7 +380,7 @@ export default function HistoryPanel({onLoadResult}: HistoryPanelProps) {
                                 <div
                                     key={r.id}
                                     className="px-4 py-3 hover:bg-gray-50 transition flex items-center gap-4 cursor-pointer"
-                                    onClick={() => handleDetail(r.id)}
+                                    onClick={() => handleOpenDetail(r.id)}
                                 >
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
@@ -413,6 +437,7 @@ export default function HistoryPanel({onLoadResult}: HistoryPanelProps) {
                         </div>
                     </div>
                 )}
-        </div>
+            </div>
+        </>
     );
 }
