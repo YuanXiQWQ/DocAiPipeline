@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback} from "react";
+import React, {useState, useEffect, useCallback, useRef} from "react";
 import {
     BarChart3,
     Truck,
@@ -667,12 +667,27 @@ export default function DashboardPanel() {
         return convertUnit(value, fromUnit, units, rates);
     }, [units, rates]);
 
+    const scrollRef = useRef(0);
+
     const openDetail = (title: string, category: string, metric: string, unit: string) => {
+        scrollRef.current = window.scrollY;
         setDetailView({title, category, metric, unit});
+        requestAnimationFrame(() => window.scrollTo(0, 0));
     };
 
     const openHistory = (title: string, docType?: string) => {
+        scrollRef.current = window.scrollY;
         setHistoryView({title, docType});
+        requestAnimationFrame(() => window.scrollTo(0, 0));
+    };
+
+    const handleBackToMain = (cb: () => void) => {
+        cb();
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                window.scrollTo(0, scrollRef.current);
+            });
+        });
     };
 
     const resetAll = () => {
@@ -681,9 +696,12 @@ export default function DashboardPanel() {
         setUnits({...DEFAULT_UNITS});
     };
 
-    /* 历史记录列表视图 */
-    if (historyView) {
-        return (
+    const isSubView = !!(historyView || detailView);
+
+    return (
+        <>
+        {/* 历史记录列表视图 */}
+        {historyView && (
             <div className="space-y-6">
                 <div className="flex items-center gap-3 mb-2">
                     <BarChart3 className="w-6 h-6 text-primary-600"/>
@@ -692,15 +710,13 @@ export default function DashboardPanel() {
                 <HistoryListView
                     title={historyView.title}
                     docType={historyView.docType}
-                    onBack={() => setHistoryView(null)}
+                    onBack={() => handleBackToMain(() => setHistoryView(null))}
                 />
             </div>
-        );
-    }
+        )}
 
-    /* 明细视图 */
-    if (detailView) {
-        return (
+        {/* 明细视图 */}
+        {detailView && (
             <div className="space-y-6">
                 <div className="flex items-center gap-3 mb-2">
                     <BarChart3 className="w-6 h-6 text-primary-600"/>
@@ -713,15 +729,13 @@ export default function DashboardPanel() {
                     dateFrom={dateFrom}
                     dateTo={dateTo}
                     unit={detailView.unit}
-                    onBack={() => { setDetailView(null); fetchData(); }}
+                    onBack={() => handleBackToMain(() => { setDetailView(null); fetchData(); })}
                 />
             </div>
-        );
-    }
+        )}
 
-    /* 主看板视图 */
-    return (
-        <div className="space-y-8">
+        {/* 主看板视图：子视图打开时隐藏但不卸载 */}
+        <div style={{display: isSubView ? "none" : undefined}} className="space-y-8">
             <div className="flex items-center gap-3">
                 <BarChart3 className="w-6 h-6 text-primary-600"/>
                 <h2 className="text-xl font-semibold text-gray-900">{t("dashboard.title")}</h2>
@@ -842,5 +856,6 @@ export default function DashboardPanel() {
                 </div>
             ) : null}
         </div>
+        </>
     );
 }
