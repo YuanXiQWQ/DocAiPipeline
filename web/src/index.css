@@ -18,6 +18,7 @@
 }
 
 /* 将 CSS 变量桥接到 Tailwind 的 primary-* 工具类 */
+/*noinspection CssInvalidAtRule*/
 @theme {
     --color-primary-50: var(--theme-primary-50);
     --color-primary-100: var(--theme-primary-100);

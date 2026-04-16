@@ -88,6 +88,10 @@ export interface UserSettings {
     default_length_unit: string;
     default_area_unit: string;
     default_volume_unit: string;
+    settlement_currency: string;
+    settlement_length_unit: string;
+    settlement_area_unit: string;
+    settlement_volume_unit: string;
 }
 
 export interface SettingsResponse {
@@ -205,26 +209,26 @@ export async function deleteHistory(id: string): Promise<void> {
 export interface ImportSummary {
     total_batches: number;
     total_invoices: number;
-    total_amount_eur: number;
-    total_volume_m3: number;
+    total_amount: number;
+    total_volume: number;
     suppliers: Record<string, number>;
 }
 
 export interface LogSummaryData {
     total_inbound_logs: number;
-    total_inbound_m3: number;
+    total_inbound_volume: number;
     total_outbound_logs: number;
-    total_outbound_m3: number;
+    total_outbound_volume: number;
     batches: number;
 }
 
 export interface FactorySummaryData {
     soak_pool_logs: number;
-    soak_pool_m3: number;
+    soak_pool_volume: number;
     slicing_logs: number;
-    slicing_output_m2: number;
+    slicing_output_area: number;
     packing_pieces: number;
-    packing_area_m2: number;
+    packing_area: number;
     packing_packages: number;
 }
 

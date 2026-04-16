@@ -61,11 +61,17 @@ export default function SettingsPanel({onSettingsChange}: Props) {
     const [baseUrl, setBaseUrl] = useState("");
     const [language, setLanguage] = useState<Locale>(getCurrentLocale());
 
-    // 默认单位
+    // 默认录入单位
     const [defaultCurrency, setDefaultCurrency] = useState("EUR");
     const [defaultLengthUnit, setDefaultLengthUnit] = useState("mm");
     const [defaultAreaUnit, setDefaultAreaUnit] = useState("m2");
     const [defaultVolumeUnit, setDefaultVolumeUnit] = useState("m3");
+
+    // 结算单位
+    const [settlementCurrency, setSettlementCurrency] = useState("EUR");
+    const [settlementLengthUnit, setSettlementLengthUnit] = useState("m");
+    const [settlementAreaUnit, setSettlementAreaUnit] = useState("m2");
+    const [settlementVolumeUnit, setSettlementVolumeUnit] = useState("m3");
 
     // 开机自启状态
     const [autostart, setAutostartState] = useState(false);
@@ -117,6 +123,10 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                 if (res.settings.default_length_unit) setDefaultLengthUnit(res.settings.default_length_unit);
                 if (res.settings.default_area_unit) setDefaultAreaUnit(res.settings.default_area_unit);
                 if (res.settings.default_volume_unit) setDefaultVolumeUnit(res.settings.default_volume_unit);
+                if (res.settings.settlement_currency) setSettlementCurrency(res.settings.settlement_currency);
+                if (res.settings.settlement_length_unit) setSettlementLengthUnit(res.settings.settlement_length_unit);
+                if (res.settings.settlement_area_unit) setSettlementAreaUnit(res.settings.settlement_area_unit);
+                if (res.settings.settlement_volume_unit) setSettlementVolumeUnit(res.settings.settlement_volume_unit);
                 setIsDesktop(platformRes.desktop);
                 setAppVersion(platformRes.version);
                 setAutostartState(autostartRes.enabled);
@@ -148,6 +158,10 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                 default_length_unit: defaultLengthUnit,
                 default_area_unit: defaultAreaUnit,
                 default_volume_unit: defaultVolumeUnit,
+                settlement_currency: settlementCurrency,
+                settlement_length_unit: settlementLengthUnit,
+                settlement_area_unit: settlementAreaUnit,
+                settlement_volume_unit: settlementVolumeUnit,
                 ...overrides,
             };
             const res = await updateSettings(body);
@@ -161,13 +175,13 @@ export default function SettingsPanel({onSettingsChange}: Props) {
         } finally {
             setSaving(false);
         }
-    }, [selectedModel, baseUrl, language, defaultCurrency, defaultLengthUnit, defaultAreaUnit, defaultVolumeUnit]);
+    }, [selectedModel, baseUrl, language, defaultCurrency, defaultLengthUnit, defaultAreaUnit, defaultVolumeUnit, settlementCurrency, settlementLengthUnit, settlementAreaUnit, settlementVolumeUnit]);
 
-    /** model / language 变化时立即保存 */
+    /** model / language / 单位变化时立即保存 */
     useEffect(() => {
         if (!initialized.current) return;
         void doSave();
-    }, [selectedModel, language, defaultCurrency, defaultLengthUnit, defaultAreaUnit, defaultVolumeUnit]);
+    }, [selectedModel, language, defaultCurrency, defaultLengthUnit, defaultAreaUnit, defaultVolumeUnit, settlementCurrency, settlementLengthUnit, settlementAreaUnit, settlementVolumeUnit]);
 
     /** API Key / Base URL 失焦时保存 */
     const handleBlurSave = useCallback(() => {
@@ -545,6 +559,44 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                 <div>
                                     <label className="block text-xs text-slate-500 mb-1">{t("settings.default_volume")}</label>
                                     <select value={defaultVolumeUnit} onChange={e => setDefaultVolumeUnit(e.target.value)}
+                                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+                                        {VOLUME_UNITS.map(u => <option key={u} value={u}>{unitLabel(u)}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 结算单位 */}
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                                {t("settings.settlement_units")}
+                            </label>
+                            <p className="text-xs text-slate-400 mb-3">{t("settings.settlement_units_desc")}</p>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs text-slate-500 mb-1">{t("settings.default_currency")}</label>
+                                    <select value={settlementCurrency} onChange={e => setSettlementCurrency(e.target.value)}
+                                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+                                        {CURRENCY_UNITS.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-slate-500 mb-1">{t("settings.default_length")}</label>
+                                    <select value={settlementLengthUnit} onChange={e => setSettlementLengthUnit(e.target.value)}
+                                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+                                        {LENGTH_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-slate-500 mb-1">{t("settings.default_area")}</label>
+                                    <select value={settlementAreaUnit} onChange={e => setSettlementAreaUnit(e.target.value)}
+                                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+                                        {AREA_UNITS.map(u => <option key={u} value={u}>{unitLabel(u)}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-slate-500 mb-1">{t("settings.default_volume")}</label>
+                                    <select value={settlementVolumeUnit} onChange={e => setSettlementVolumeUnit(e.target.value)}
                                             className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
                                         {VOLUME_UNITS.map(u => <option key={u} value={u}>{unitLabel(u)}</option>)}
                                     </select>
