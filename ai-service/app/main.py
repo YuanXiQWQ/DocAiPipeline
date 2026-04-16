@@ -219,6 +219,62 @@ async def update_autostart(body: dict):
 
 
 # ------------------------------------------------------------------
+# 关闭行为与窗口控制（桌面专属）
+# ------------------------------------------------------------------
+
+
+@app.get("/api/close-behavior")
+async def get_close_behavior():
+    """获取关闭窗口时的行为（minimize_to_tray / exit）。"""
+    data = _load_desktop_prefs()
+    return {"behavior": data.get("close_behavior", "minimize_to_tray")}
+
+
+@app.put("/api/close-behavior")
+async def set_close_behavior(body: dict):
+    """设置关闭窗口行为。"""
+    behavior = body.get("behavior", "minimize_to_tray")
+    if behavior not in ("minimize_to_tray", "exit"):
+        raise HTTPException(status_code=400, detail="无效的关闭行为")
+    data = _load_desktop_prefs()
+    data["close_behavior"] = behavior
+    _save_desktop_prefs(data)
+    return {"behavior": behavior}
+
+
+@app.post("/api/reset-window")
+async def reset_window():
+    """重置窗口大小为默认值。"""
+    data = _load_desktop_prefs()
+    data["window_width"] = 1280
+    data["window_height"] = 860
+    _save_desktop_prefs(data)
+    return {"message": "窗口大小已重置，重启应用后生效"}
+
+
+def _desktop_prefs_path() -> Path:
+    return Path("desktop_prefs.json")
+
+
+def _load_desktop_prefs() -> dict:
+    import json
+    p = _desktop_prefs_path()
+    if p.exists():
+        try:
+            return json.loads(p.read_text("utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {}
+
+
+def _save_desktop_prefs(data: dict) -> None:
+    import json
+    _desktop_prefs_path().write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+# ------------------------------------------------------------------
 # 版本与更新检查
 # ------------------------------------------------------------------
 
@@ -242,11 +298,26 @@ async def check_version():
                 latest_tag = data.get("tag_name", "").lstrip("v")
                 result["latest"] = latest_tag
                 result["release_url"] = data.get("html_url", "")
-                if latest_tag and latest_tag != APP_VERSION:
+                if latest_tag and _is_newer(latest_tag, APP_VERSION):
                     result["has_update"] = True
     except Exception as e:
         logger.warning(f"检查更新失败: {e}")
     return result
+
+
+def _is_newer(latest: str, current: str) -> bool:
+    """语义版本号比较，判断 latest 是否比 current 新。"""
+    try:
+        from packaging.version import Version
+        return Version(latest) > Version(current)
+    except Exception:
+        # 回退简单元组比较
+        def _parts(v: str) -> tuple[int, ...]:
+            return tuple(int(x) for x in v.split(".") if x.isdigit())
+        try:
+            return _parts(latest) > _parts(current)
+        except Exception:
+            return latest != current
 
 
 # ------------------------------------------------------------------

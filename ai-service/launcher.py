@@ -143,6 +143,104 @@ def _run_tray(
 
 
 # ------------------------------------------------------------------
+# 桌面偏好（关闭行为 / 窗口尺寸）
+# ------------------------------------------------------------------
+
+_PREFS_FILE = "desktop_prefs.json"
+
+
+def _load_prefs() -> dict:
+    """读取桌面偏好设置。"""
+    import json
+    p = Path(_PREFS_FILE)
+    if p.exists():
+        try:
+            return json.loads(p.read_text("utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {}
+
+
+# ------------------------------------------------------------------
+# Splash 闪屏窗口（tkinter，无额外依赖）
+# ------------------------------------------------------------------
+
+
+def _show_splash(base: Path) -> tuple[Any, Any]:
+    """显示启动闪屏窗口，返回 (root, destroy_fn)。"""
+    try:
+        import tkinter as tk
+    except ImportError:
+        return None, lambda: None
+
+    root = tk.Tk()
+    root.overrideredirect(True)  # 无标题栏
+    root.attributes("-topmost", True)
+
+    # 窗口尺寸与居中
+    sw, sh = 420, 260
+    x = (root.winfo_screenwidth() - sw) // 2
+    y = (root.winfo_screenheight() - sh) // 2
+    root.geometry(f"{sw}x{sh}+{x}+{y}")
+
+    # 背景：渐变蓝色（用 Canvas 模拟）
+    canvas = tk.Canvas(root, width=sw, height=sh, highlightthickness=0)
+    canvas.pack(fill="both", expand=True)
+
+    # 绘制渐变背景（从深蓝到浅蓝）
+    for i in range(sh):
+        ratio = i / sh
+        r = int(30 + 190 * ratio)
+        g = int(64 + 160 * ratio)
+        b = int(175 + 60 * ratio)
+        color = f"#{r:02x}{g:02x}{b:02x}"
+        canvas.create_line(0, i, sw, i, fill=color)
+
+    # 尝试加载图标
+    icon_path = base / "icon.ico"
+    photo = None
+    if icon_path.exists():
+        try:
+            from PIL import Image, ImageTk
+            img = Image.open(str(icon_path))
+            img = img.resize((64, 64), Image.LANCZOS)
+            photo = ImageTk.PhotoImage(img)
+            canvas.create_image(sw // 2, 70, image=photo)
+        except Exception:
+            pass
+
+    # 应用名称
+    canvas.create_text(sw // 2, 130, text=APP_NAME,
+                       font=("Segoe UI", 22, "bold"), fill="white")
+    # 作者
+    canvas.create_text(sw // 2, 165, text="by YuanXiQWQ",
+                       font=("Segoe UI", 11), fill="#d0e0f0")
+    # 加载提示
+    _loading_text = canvas.create_text(
+        sw // 2, 220, text="正在启动服务…",
+        font=("Segoe UI", 9), fill="#c0d8f0")
+
+    # 保持图片引用防止被 GC
+    canvas._photo_ref = photo  # type: ignore[attr-defined]
+    root._loading_text_id = _loading_text  # type: ignore[attr-defined]
+    root._canvas = canvas  # type: ignore[attr-defined]
+
+    root.update()
+    return root, lambda: root.destroy()
+
+
+def _update_splash_text(root: Any, text: str) -> None:
+    """更新闪屏窗口的加载提示文字。"""
+    try:
+        canvas = root._canvas  # type: ignore[attr-defined]
+        text_id = root._loading_text_id  # type: ignore[attr-defined]
+        canvas.itemconfig(text_id, text=text)
+        root.update()
+    except Exception:
+        pass
+
+
+# ------------------------------------------------------------------
 # 主流程
 # ------------------------------------------------------------------
 
@@ -160,6 +258,9 @@ def main() -> None:
     base = _base_dir()
     os.chdir(base)
 
+    # 显示 Splash 闪屏
+    splash_root, splash_destroy = _show_splash(base)
+
     # 查找可用端口
     port = _find_free_port(DEFAULT_PORT)
     host = DEFAULT_HOST
@@ -173,7 +274,15 @@ def main() -> None:
     # 关闭信号
     shutdown_event = threading.Event()
 
+    # 读取桌面偏好
+    prefs = _load_prefs()
+    win_w = prefs.get("window_width", WINDOW_WIDTH)
+    win_h = prefs.get("window_height", WINDOW_HEIGHT)
+
     # 启动 uvicorn（在子线程中）
+    if splash_root:
+        _update_splash_text(splash_root, "正在启动后端服务…")
+
     config = uvicorn.Config(
         "app.main:app",
         host=host,
@@ -188,11 +297,18 @@ def main() -> None:
     server_thread.start()
 
     # 等待服务就绪
+    if splash_root:
+        _update_splash_text(splash_root, "正在加载模型…")
+
     if not _wait_for_server(host, port):
         logger.error("服务启动超时！")
+        splash_destroy()
         return
 
     logger.info(f"服务已就绪: {url}")
+
+    if splash_root:
+        _update_splash_text(splash_root, "正在打开应用窗口…")
 
     # 尝试导入 pywebview
     try:
@@ -202,22 +318,41 @@ def main() -> None:
         _webview = None  # type: ignore[assignment]
         _has_webview = False
 
+    # 关闭 Splash（主窗口即将出现）
+    splash_destroy()
+
     if _has_webview:
         # pywebview 原生窗口模式
         assert _webview is not None
         _wv_window = _webview.create_window(
             APP_NAME,
             url,
-            width=WINDOW_WIDTH,
-            height=WINDOW_HEIGHT,
+            width=win_w,
+            height=win_h,
             min_size=(800, 600),
+            confirm_close=True,  # 允许 closing 事件取消关闭
         )
 
+        def _on_closing() -> bool:
+            """窗口关闭事件：根据用户偏好决定最小化还是退出。"""
+            # 每次关闭时重新读取偏好（用户可能刚改过）
+            _cb = _load_prefs().get("close_behavior", "minimize_to_tray")
+            if _cb == "minimize_to_tray":
+                assert _wv_window is not None
+                _wv_window.hide()
+            else:
+                # exit 模式：直接销毁窗口
+                shutdown_event.set()
+                assert _wv_window is not None
+                _wv_window.destroy()
+            return False  # 始终取消默认确认对话框
+
         def _on_closed() -> None:
-            """窗口关闭时触发优雅退出。"""
+            """窗口真正关闭后触发。"""
             shutdown_event.set()
 
         assert _wv_window is not None
+        _wv_window.events.closing += _on_closing
         _wv_window.events.closed += _on_closed
 
         # 启动托盘（后台线程）

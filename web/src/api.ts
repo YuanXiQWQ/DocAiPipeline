@@ -352,6 +352,25 @@ export async function setAutostart(enabled: boolean): Promise<{ enabled: boolean
     return data;
 }
 
+/* 关闭窗口行为（桌面专属） */
+export type CloseBehavior = "minimize_to_tray" | "exit";
+
+export async function getCloseBehavior(): Promise<{ behavior: CloseBehavior }> {
+    const {data} = await api.get<{ behavior: CloseBehavior }>("/api/close-behavior");
+    return data;
+}
+
+export async function setCloseBehavior(behavior: CloseBehavior): Promise<{ behavior: CloseBehavior }> {
+    const {data} = await api.put<{ behavior: CloseBehavior }>("/api/close-behavior", {behavior});
+    return data;
+}
+
+/* 重置窗口大小（桌面专属） */
+export async function resetWindow(): Promise<{ message: string }> {
+    const {data} = await api.post<{ message: string }>("/api/reset-window");
+    return data;
+}
+
 /* 版本与更新检查 */
 export interface VersionInfo {
     current: string;

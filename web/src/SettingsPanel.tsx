@@ -11,6 +11,9 @@ import {
     RefreshCw,
     Power,
     Info,
+    Minimize2,
+    LogOut,
+    RotateCcw,
 } from "lucide-react";
 import {
     getSettings,
@@ -18,11 +21,15 @@ import {
     getPlatform,
     getAutostart,
     setAutostart as apiSetAutostart,
+    getCloseBehavior,
+    setCloseBehavior as apiSetCloseBehavior,
+    resetWindow as apiResetWindow,
     checkUpdate,
     extractErrorMessage,
     type UserSettings,
     type ModelInfo,
     type VersionInfo,
+    type CloseBehavior,
 } from "./api";
 import {getCurrentLocale, setLocale, LOCALE_OPTIONS, useT, type Locale} from "./i18n";
 
@@ -51,6 +58,12 @@ export default function SettingsPanel({onSettingsChange}: Props) {
     const [autostart, setAutostartState] = useState(false);
     const [autostartLoading, setAutostartLoading] = useState(false);
 
+    // 关闭行为
+    const [closeBehavior, setCloseBehaviorState] = useState<CloseBehavior>("minimize_to_tray");
+
+    // 重置窗口
+    const [resetMsg, setResetMsg] = useState<string | null>(null);
+
     // 平台检测
     const [isDesktop, setIsDesktop] = useState(false);
     const [appVersion, setAppVersion] = useState("");
@@ -69,8 +82,9 @@ export default function SettingsPanel({onSettingsChange}: Props) {
             getSettings(),
             getPlatform().catch(() => ({desktop: false, version: ""})),
             getAutostart().catch(() => ({enabled: false})),
+            getCloseBehavior().catch(() => ({behavior: "minimize_to_tray" as CloseBehavior})),
         ])
-            .then(([res, platformRes, autostartRes]) => {
+            .then(([res, platformRes, autostartRes, closeBehaviorRes]) => {
                 setCurrentSettings(res.settings);
                 setModels(res.available_models);
                 setSelectedModel(res.settings.openai_model);
@@ -79,6 +93,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                 setIsDesktop(platformRes.desktop);
                 setAppVersion(platformRes.version);
                 setAutostartState(autostartRes.enabled);
+                setCloseBehaviorState(closeBehaviorRes.behavior);
             })
             .catch((err) => setError(extractErrorMessage(err)))
             .finally(() => setLoading(false));
@@ -243,39 +258,116 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                             </div>
                         </details>
 
-                        {/* 开机自启（桌面专属） */}
+                        {/* ── 通用 ── */}
                         {isDesktop && (
-                        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
-                            <div className="flex items-center gap-3">
-                                <Power className="w-5 h-5 text-slate-500"/>
-                                <div>
-                                    <p className="text-sm font-medium text-slate-700">{t("settings.autostart")}</p>
-                                    <p className="text-xs text-slate-400">{t("settings.autostart_desc")}</p>
+                        <div className="space-y-4">
+                            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">
+                                {t("settings.general")}
+                            </h3>
+
+                            {/* 开机自启 */}
+                            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+                                <div className="flex items-center gap-3">
+                                    <Power className="w-5 h-5 text-slate-500"/>
+                                    <div>
+                                        <p className="text-sm font-medium text-slate-700">{t("settings.autostart")}</p>
+                                        <p className="text-xs text-slate-400">{t("settings.autostart_desc")}</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={async () => {
+                                        setAutostartLoading(true);
+                                        try {
+                                            const res = await apiSetAutostart(!autostart);
+                                            setAutostartState(res.enabled);
+                                        } catch (err) {
+                                            setError(extractErrorMessage(err));
+                                        } finally {
+                                            setAutostartLoading(false);
+                                        }
+                                    }}
+                                    disabled={autostartLoading}
+                                    className={`relative w-11 h-6 rounded-full transition-colors ${
+                                        autostart ? "bg-blue-600" : "bg-slate-300"
+                                    }`}
+                                >
+                                    <span
+                                        className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                                            autostart ? "translate-x-5" : ""
+                                        }`}
+                                    />
+                                </button>
+                            </div>
+
+                            {/* 关闭窗口行为 */}
+                            <div className="p-4 bg-slate-50 rounded-xl space-y-3">
+                                <p className="text-sm font-medium text-slate-700">{t("settings.close_behavior")}</p>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            try {
+                                                await apiSetCloseBehavior("minimize_to_tray");
+                                                setCloseBehaviorState("minimize_to_tray");
+                                            } catch (err) { setError(extractErrorMessage(err)); }
+                                        }}
+                                        className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-xl border transition-all ${
+                                            closeBehavior === "minimize_to_tray"
+                                                ? "border-blue-500 bg-blue-50 text-blue-700"
+                                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                                        }`}
+                                    >
+                                        <Minimize2 className="w-4 h-4"/>
+                                        {t("settings.close_minimize")}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            try {
+                                                await apiSetCloseBehavior("exit");
+                                                setCloseBehaviorState("exit");
+                                            } catch (err) { setError(extractErrorMessage(err)); }
+                                        }}
+                                        className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-xl border transition-all ${
+                                            closeBehavior === "exit"
+                                                ? "border-blue-500 bg-blue-50 text-blue-700"
+                                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                                        }`}
+                                    >
+                                        <LogOut className="w-4 h-4"/>
+                                        {t("settings.close_exit")}
+                                    </button>
                                 </div>
                             </div>
-                            <button
-                                onClick={async () => {
-                                    setAutostartLoading(true);
-                                    try {
-                                        const res = await apiSetAutostart(!autostart);
-                                        setAutostartState(res.enabled);
-                                    } catch (err) {
-                                        setError(extractErrorMessage(err));
-                                    } finally {
-                                        setAutostartLoading(false);
-                                    }
-                                }}
-                                disabled={autostartLoading}
-                                className={`relative w-11 h-6 rounded-full transition-colors ${
-                                    autostart ? "bg-blue-600" : "bg-slate-300"
-                                }`}
-                            >
-                                <span
-                                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                                        autostart ? "translate-x-5" : ""
-                                    }`}
-                                />
-                            </button>
+
+                            {/* 重置窗口大小 */}
+                            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+                                <div className="flex items-center gap-3">
+                                    <RotateCcw className="w-5 h-5 text-slate-500"/>
+                                    <div>
+                                        <p className="text-sm font-medium text-slate-700">{t("settings.reset_window")}</p>
+                                        <p className="text-xs text-slate-400">{t("settings.reset_window_desc")}</p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        try {
+                                            const res = await apiResetWindow();
+                                            setResetMsg(res.message);
+                                            setTimeout(() => setResetMsg(null), 3000);
+                                        } catch (err) { setError(extractErrorMessage(err)); }
+                                    }}
+                                    className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-white transition-colors"
+                                >
+                                    {t("settings.reset_window_btn")}
+                                </button>
+                            </div>
+                            {resetMsg && (
+                                <p className="text-xs text-emerald-600 flex items-center gap-1">
+                                    <CheckCircle className="w-3.5 h-3.5"/> {resetMsg}
+                                </p>
+                            )}
                         </div>
                         )}
 
