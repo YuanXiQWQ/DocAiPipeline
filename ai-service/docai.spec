@@ -26,6 +26,11 @@ datas = [
     (str(BASE / "icon.ico"), "."),
 ]
 
+# 版本号文件（CI 构建时生成）
+version_file = BASE / "VERSION"
+if version_file.exists():
+    datas.append((str(version_file), "."))
+
 # 可选：YOLO 模型文件（如果存在）
 yolo_model = BASE / "models" / "yolo_customs_doc.pt"
 if yolo_model.exists():

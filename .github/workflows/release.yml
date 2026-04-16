@@ -28,6 +28,8 @@ jobs:
           VERSION="${GITHUB_REF_NAME}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "zip_name=DocAI-Pipeline-${VERSION}-win-x64.zip" >> "$GITHUB_OUTPUT"
+          # 写入 VERSION 文件供运行时读取
+          echo "$VERSION" > ai-service/VERSION
 
       # ---- 安装 Node.js ----
       - name: 安装 Node.js

@@ -55,10 +55,24 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
+def _read_version() -> str:
+    """从 VERSION 文件读取版本号（CI 构建时写入），开发模式回退 'dev'。"""
+    import sys
+    # PyInstaller onedir: _MEIPASS 就是 exe 所在目录
+    if getattr(sys, "frozen", False):
+        base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    else:
+        base = Path(__file__).resolve().parent.parent  # ai-service/
+    vf = base / "VERSION"
+    if vf.exists():
+        return vf.read_text(encoding="utf-8").strip()
+    return "dev"
+
+
 app = FastAPI(
     title="DocAI Pipeline",
     description="报关单自动识别与智能归档系统 — AI Service",
-    version="0.2.0",
+    version=_read_version(),
     lifespan=lifespan,
 )
 
