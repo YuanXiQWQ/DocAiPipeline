@@ -58,6 +58,7 @@
   "done.title": "Završeno",
   "done.rows_written": "Upisano {n} redova",
   "done.download": "Preuzmi Excel",
+  "done.open_file": "Prikaži u folderu",
   "done.new": "Obradi sledeći",
   "error.backend_offline": "Server nije dostupan",
   "error.backend_online": "Server je dostupan",

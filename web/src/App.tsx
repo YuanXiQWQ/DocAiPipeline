@@ -36,6 +36,7 @@ import {
     fillExcel,
     type FillResult,
     getPlatform,
+    openFile,
     getScanDevices,
     getSettings,
     getUpdateStatus,
@@ -107,6 +108,7 @@ export default function App() {
     const [scanSelectedDevice, setScanSelectedDevice] = useState("");
     const [scanning, setScanning] = useState(false);
     const [scanMsg, setScanMsg] = useState("");
+    const [isDesktop, setIsDesktop] = useState(false);
 
     /* 派生状态 */
     const isProcessing = files.some(f => f.status === "processing");
@@ -132,6 +134,7 @@ export default function App() {
         // 桌面端：轮询更新状态
         getPlatform()
             .then((p) => {
+                setIsDesktop(p.desktop);
                 if (!p.desktop) return;
                 const poll = setInterval(() => {
                     getUpdateStatus()
@@ -309,21 +312,28 @@ export default function App() {
     const handleDownload = useCallback(async () => {
         if (!fillResult) return;
         try {
+            if (isDesktop) {
+                await openFile(fillResult.filename);
+                return;
+            }
             const resp = await fetch(fillResult.download_url);
             if (!resp.ok) { setError(`下载失败: HTTP ${resp.status}`); return; }
             const blob = await resp.blob();
-            const url = URL.createObjectURL(blob);
+            const blobUrl = URL.createObjectURL(blob);
             const a = document.createElement("a");
-            a.href = url;
+            a.href = blobUrl;
             a.download = fillResult.filename;
+            a.style.display = "none";
             document.body.appendChild(a);
             a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
+            setTimeout(() => {
+                a.remove();
+                URL.revokeObjectURL(blobUrl);
+            }, 1000);
         } catch (err) {
             setError(extractErrorMessage(err));
         }
-    }, [fillResult]);
+    }, [fillResult, isDesktop]);
 
     /* 回到主页（不中断处理，不清状态） */
     const handleGoHome = useCallback(() => {
@@ -485,6 +495,7 @@ export default function App() {
                             handleAbortAll={handleAbortAll}
                             handleFill={handleFill}
                             handleDownload={handleDownload}
+                            isDesktop={isDesktop}
                             handleReset={handleReset}
                             handleGoHome={handleGoHome}
                             scanAvailable={scanAvailable}
@@ -538,7 +549,7 @@ function ProcessingFlow({
                             fillResult, error, setTemplateFile,
                             inputRef, dragging, setDragging, preview,
                             needsSetup, handleFileSelect, handleDrop,
-                            handleProcess, handleAbortAll, handleFill, handleDownload, handleReset, handleGoHome,
+                            handleProcess, handleAbortAll, handleFill, handleDownload, isDesktop, handleReset, handleGoHome,
                             scanAvailable, scanDevices, scanSelectedDevice, setScanSelectedDevice,
                             scanning, scanMsg, handleScan,
                         }: {
@@ -566,6 +577,7 @@ function ProcessingFlow({
     handleAbortAll: () => void;
     handleFill: () => void;
     handleDownload: () => void;
+    isDesktop: boolean;
     handleReset: () => void;
     handleGoHome: () => void;
     scanAvailable: boolean;
@@ -1210,7 +1222,7 @@ function ProcessingFlow({
                             className="px-6 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors font-medium inline-flex items-center gap-2"
                         >
                             <Download className="w-4 h-4"/>
-                            {t("done.download")}
+                            {isDesktop ? t("done.open_file") : t("done.download")}
                         </button>
                         <button
                             onClick={handleGoHome}

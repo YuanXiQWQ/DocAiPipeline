@@ -58,6 +58,7 @@
   "done.title": "Complete",
   "done.rows_written": "{n} rows written",
   "done.download": "Download Excel",
+  "done.open_file": "Show in Folder",
   "done.new": "Process Next",
   "error.backend_offline": "Backend offline",
   "error.backend_online": "Backend online",

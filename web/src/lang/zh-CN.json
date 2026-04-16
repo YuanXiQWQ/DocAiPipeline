@@ -58,6 +58,7 @@
   "done.title": "处理完成",
   "done.rows_written": "已写入 {n} 行数据",
   "done.download": "下载 Excel",
+  "done.open_file": "打开文件位置",
   "done.new": "处理下一个",
   "error.backend_offline": "后端未连接",
   "error.backend_online": "后端已连接",

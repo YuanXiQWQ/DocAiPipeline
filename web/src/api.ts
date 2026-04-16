@@ -53,6 +53,11 @@ export async function fillExcel(
     return data;
 }
 
+/** 桌面端：用系统默认程序打开已生成的文件 */
+export async function openFile(filename: string): Promise<void> {
+    await api.post(`/api/open-file/${encodeURIComponent(filename)}`);
+}
+
 export async function healthCheck(): Promise<{ status: string }> {
     const {data} = await api.get("/health");
     return data;

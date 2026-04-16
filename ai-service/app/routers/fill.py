@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import uuid
 from pathlib import Path
@@ -261,3 +262,25 @@ async def download_file(filename: str):
         filename=filename,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+
+
+@router.post("/open-file/{filename}")
+async def open_file(filename: str):
+    """在系统文件管理器中打开文件所在目录并选中文件（桌面端专用）。"""
+    import subprocess
+
+    file_path = (Path(settings.output_dir) / filename).resolve()
+    if not file_path.exists():
+        raise HTTPException(404, f"文件不存在: {filename}")
+
+    try:
+        if sys.platform == "win32":
+            subprocess.Popen(["explorer", "/select,", str(file_path)])
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", "-R", str(file_path)])
+        else:
+            subprocess.Popen(["xdg-open", str(file_path.parent)])
+    except Exception as e:
+        raise HTTPException(500, f"无法打开目录: {e}")
+
+    return {"message": f"已打开目录: {file_path.parent}"}
