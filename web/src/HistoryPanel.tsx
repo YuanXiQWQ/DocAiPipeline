@@ -272,7 +272,7 @@ export default function HistoryPanel({onLoadResult}: HistoryPanelProps) {
     return (
         <div className="space-y-6">
             <div className="flex items-center gap-3 mb-2">
-                <Clock className="w-6 h-6 text-blue-600"/>
+                <Clock className="w-6 h-6 text-primary-600"/>
                 <h2 className="text-xl font-semibold text-gray-900">{t("history.title")}</h2>
                 {stats && (
                     <span className="text-sm text-gray-500">
@@ -286,7 +286,7 @@ export default function HistoryPanel({onLoadResult}: HistoryPanelProps) {
                     <div className="py-3 px-4 bg-gray-50/50 rounded-xl border border-gray-100">
                         <div className="flex gap-6 text-sm">
                             <div className="flex items-center gap-1.5">
-                                <BarChart3 className="w-4 h-4 text-blue-500"/>
+                                <BarChart3 className="w-4 h-4 text-primary-500"/>
                                 <span className="text-gray-600">{t("history.total_pages")}</span>
                                 <span className="font-semibold">{stats.total_pages_processed}</span>
                             </div>
@@ -318,7 +318,7 @@ export default function HistoryPanel({onLoadResult}: HistoryPanelProps) {
                                 setKeyword(e.target.value);
                                 setOffset(0);
                             }}
-                            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                         />
                     </div>
                     <select
@@ -327,7 +327,7 @@ export default function HistoryPanel({onLoadResult}: HistoryPanelProps) {
                             setFilterType(e.target.value);
                             setOffset(0);
                         }}
-                        className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500"
                     >
                         <option value="">{t("history.all_types")}</option>
                         {Object.entries(DOC_TYPE_KEYS)
@@ -342,7 +342,7 @@ export default function HistoryPanel({onLoadResult}: HistoryPanelProps) {
                 <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                     {loading ? (
                         <div className="flex items-center justify-center py-20">
-                            <Loader2 className="w-6 h-6 animate-spin text-blue-500"/>
+                            <Loader2 className="w-6 h-6 animate-spin text-primary-500"/>
                         </div>
                     ) : records.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-gray-400">
@@ -366,7 +366,7 @@ export default function HistoryPanel({onLoadResult}: HistoryPanelProps) {
                                             )}
                                         </div>
                                         <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500">
-                      <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded">
+                      <span className="px-1.5 py-0.5 bg-primary-50 text-primary-700 rounded">
                         {DOC_TYPE_KEYS[r.doc_type] ? t(DOC_TYPE_KEYS[r.doc_type]) : r.doc_type}
                       </span>
                                             <span>{r.pages} {t("history.pages_unit")}</span>

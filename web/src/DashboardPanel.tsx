@@ -237,7 +237,7 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
         <div className="space-y-4">
             {/* 顶栏 */}
             <div className="flex items-center justify-between">
-                <button onClick={onBack} className="flex items-center gap-1 text-sm text-blue-600 hover:underline">
+                <button onClick={onBack} className="flex items-center gap-1 text-sm text-primary-600 hover:underline">
                     <ArrowLeft className="w-4 h-4"/> {t("dashboard.back")}
                 </button>
                 <div className="flex items-center gap-2">
@@ -269,7 +269,7 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
 
             {/* 明细表格 */}
             {loading ? (
-                <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-blue-500"/></div>
+                <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-primary-500"/></div>
             ) : entries.length === 0 && !editing ? (
                 <p className="text-center text-gray-400 py-10">{t("dashboard.no_entries")}</p>
             ) : entries.length === 0 && editing ? (
@@ -309,7 +309,7 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
                         <tbody>
                         {entries.map((entry) => (
                             <React.Fragment key={entry.id}>
-                                <tr className={`border-t border-gray-100 ${entry.deleted ? "bg-gray-50 opacity-50" : ""} ${editingRow === entry.id ? "bg-blue-50" : ""}`}>
+                                <tr className={`border-t border-gray-100 ${entry.deleted ? "bg-gray-50 opacity-50" : ""} ${editingRow === entry.id ? "bg-primary-50" : ""}`}>
                                     <td className="px-4 py-2.5">
                                         {editingRow === entry.id ? (
                                             <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} className="border rounded px-2 py-1 text-xs w-36"/>
@@ -326,7 +326,7 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
                                     </td>
                                     <td className="px-4 py-2.5 text-gray-600 truncate max-w-[200px]">
                                         <span className={`inline-block px-1.5 py-0.5 rounded text-xs mr-1.5 ${
-                                            entry.source === "manual" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"
+                                            entry.source === "manual" ? "bg-amber-100 text-amber-700" : "bg-primary-100 text-primary-700"
                                         }`}>{entry.source === "manual" ? t("dashboard.manual_entry") : t("dashboard.auto_entry")}</span>
                                         {entry.filename || "—"}
                                     </td>
@@ -341,14 +341,14 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
                                         <div className="flex items-center justify-center gap-1">
                                             {/* 编辑历史标记 */}
                                             {entry.revisions.length > 0 && (
-                                                <button onClick={() => toggleHistory(entry.id)} className="p-1 text-gray-400 hover:text-blue-500" title={t("dashboard.history")}>
+                                                <button onClick={() => toggleHistory(entry.id)} className="p-1 text-gray-400 hover:text-primary-500" title={t("dashboard.history")}>
                                                     <Clock className="w-3.5 h-3.5"/>
                                                 </button>
                                             )}
                                             {editing && !entry.deleted && editingRow !== entry.id && (
                                                 <>
                                                     <button onClick={() => { setEditingRow(entry.id); setEditValue(String(entry.value)); setEditDate(entry.date); setEditNote(""); }}
-                                                            className="p-1 text-gray-400 hover:text-blue-500" title={t("dashboard.edit_mode")}>
+                                                            className="p-1 text-gray-400 hover:text-primary-500" title={t("dashboard.edit_mode")}>
                                                         <Pencil className="w-3.5 h-3.5"/>
                                                     </button>
                                                     <button onClick={() => setAddAfter(entry.id)} className="p-1 text-gray-400 hover:text-emerald-500" title={t("dashboard.add_row")}>
@@ -384,7 +384,7 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
                                                 {entry.revisions.map((rev) => (
                                                     <div key={rev.revision_id} className="text-xs text-gray-500 flex gap-3">
                                                         <span className="text-gray-400 whitespace-nowrap">{rev.timestamp.slice(0, 16).replace("T", " ")}</span>
-                                                        <span className={`px-1.5 py-0.5 rounded ${rev.author === "user" ? "bg-amber-50 text-amber-600" : "bg-blue-50 text-blue-600"}`}>{rev.author}</span>
+                                                        <span className={`px-1.5 py-0.5 rounded ${rev.author === "user" ? "bg-amber-50 text-amber-600" : "bg-primary-50 text-primary-600"}`}>{rev.author}</span>
                                                         <span className="text-gray-600">
                                                             {Object.entries(rev.changes).map(([k, v]) => (
                                                                 <span key={k} className="mr-2">{k}: <span className="line-through text-red-400">{String(v.old)}</span> → <span className="text-emerald-600">{String(v.new)}</span></span>
@@ -459,7 +459,7 @@ function HistoryListView({title, docType, onBack}: {
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
-                <button onClick={onBack} className="flex items-center gap-1 text-sm text-blue-600 hover:underline">
+                <button onClick={onBack} className="flex items-center gap-1 text-sm text-primary-600 hover:underline">
                     <ArrowLeft className="w-4 h-4"/> {t("dashboard.back")}
                 </button>
                 <div className="flex items-center gap-2">
@@ -477,7 +477,7 @@ function HistoryListView({title, docType, onBack}: {
             </div>
 
             {loading ? (
-                <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-blue-500"/></div>
+                <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-primary-500"/></div>
             ) : records.length === 0 ? (
                 <p className="text-center text-gray-400 py-10">{t("dashboard.no_entries")}</p>
             ) : (
@@ -537,12 +537,12 @@ function FilterPanel({
                 <div>
                     <label className="block text-xs text-gray-500 mb-1">{t("dashboard.date_from")}</label>
                     <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                           className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"/>
+                           className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"/>
                 </div>
                 <div>
                     <label className="block text-xs text-gray-500 mb-1">{t("dashboard.date_to")}</label>
                     <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                           className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"/>
+                           className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"/>
                 </div>
                 <button onClick={() => { setDateFrom(defFrom); setDateTo(defTo); }}
                         className="px-3 py-1.5 border border-gray-200 text-gray-500 text-sm rounded-lg hover:bg-gray-50 transition">
@@ -565,7 +565,7 @@ function FilterPanel({
                                 className="border border-gray-200 rounded-lg px-2 py-1 text-sm">
                             {CURRENCY_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                         </select>
-                        <button onClick={onRefreshRates} className="p-1 text-gray-400 hover:text-blue-500" title={ratesLive ? t("dashboard.rate_live") : t("dashboard.rate_fallback")}>
+                        <button onClick={onRefreshRates} className="p-1 text-gray-400 hover:text-primary-500" title={ratesLive ? t("dashboard.rate_live") : t("dashboard.rate_fallback")}>
                             <RefreshCw className={`w-3.5 h-3.5 ${ratesLive ? "text-emerald-500" : "text-gray-300"}`}/>
                         </button>
                         {ratesLive && units.currency !== "EUR" && rates[units.currency.toLowerCase()] && (
@@ -686,7 +686,7 @@ export default function DashboardPanel() {
         return (
             <div className="space-y-6">
                 <div className="flex items-center gap-3 mb-2">
-                    <BarChart3 className="w-6 h-6 text-blue-600"/>
+                    <BarChart3 className="w-6 h-6 text-primary-600"/>
                     <h2 className="text-xl font-semibold text-gray-900">{t("dashboard.history_list_title")}</h2>
                 </div>
                 <HistoryListView
@@ -703,7 +703,7 @@ export default function DashboardPanel() {
         return (
             <div className="space-y-6">
                 <div className="flex items-center gap-3 mb-2">
-                    <BarChart3 className="w-6 h-6 text-blue-600"/>
+                    <BarChart3 className="w-6 h-6 text-primary-600"/>
                     <h2 className="text-xl font-semibold text-gray-900">{t("dashboard.detail_title")}</h2>
                 </div>
                 <DetailView
@@ -723,7 +723,7 @@ export default function DashboardPanel() {
     return (
         <div className="space-y-8">
             <div className="flex items-center gap-3">
-                <BarChart3 className="w-6 h-6 text-blue-600"/>
+                <BarChart3 className="w-6 h-6 text-primary-600"/>
                 <h2 className="text-xl font-semibold text-gray-900">{t("dashboard.title")}</h2>
             </div>
 
@@ -738,7 +738,7 @@ export default function DashboardPanel() {
 
             {loading ? (
                 <div className="flex items-center justify-center py-20">
-                    <Loader2 className="w-6 h-6 animate-spin text-blue-500"/>
+                    <Loader2 className="w-6 h-6 animate-spin text-primary-500"/>
                 </div>
             ) : error ? (
                 <div className="text-center py-20 text-red-500">{error}</div>
@@ -748,7 +748,7 @@ export default function DashboardPanel() {
                     <div>
                         <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">{t("dashboard.overview")}</h3>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <StatCard icon={<BarChart3 className="w-5 h-5 text-blue-500"/>} label={t("dashboard.docs_processed")} value={data.total_documents_processed} unit={t("dashboard.unit_doc")} color="bg-blue-50 border-blue-200"
+                            <StatCard icon={<BarChart3 className="w-5 h-5 text-primary-500"/>} label={t("dashboard.docs_processed")} value={data.total_documents_processed} unit={t("dashboard.unit_doc")} color="bg-primary-50 border-primary-200"
                                       onClick={() => openHistory(t("dashboard.docs_processed"))}/>
                             <StatCard icon={<BarChart3 className="w-5 h-5 text-indigo-500"/>} label={t("dashboard.pages_processed")} value={data.total_pages_processed} unit={t("dashboard.unit_page")} color="bg-indigo-50 border-indigo-200"
                                       onClick={() => openHistory(t("dashboard.pages_processed"))}/>

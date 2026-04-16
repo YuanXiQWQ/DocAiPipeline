@@ -207,10 +207,6 @@ def _show_splash(base: Path) -> tuple[Any, Any]:
         sw, sh, sw * 0.5, sh, sw, sh * 0.35,
         fill="#dcc5f5", outline="",
     )
-    # 水平装饰线（细，浅紫）
-    line_y = int(sh * 0.68)
-    canvas.create_line(0, line_y, sw, line_y, fill="#d4b8f0", width=1)
-
     # ── 图标 + 标题 + 作者（居中） ──
     icon_size = 88
     # 整组内容水平居中：图标宽 + 间距 + 文字区
@@ -270,7 +266,7 @@ def _show_splash(base: Path) -> tuple[Any, Any]:
     return root, lambda: root.destroy()
 
 
-def _update_splash_text(root: Any, _text: str, progress: float = 0.0) -> None:
+def _update_splash_text(root: Any, _text: str) -> None:
     """刷新闪屏窗口（保持窗口响应）。"""
     try:
         root.update()
@@ -486,7 +482,7 @@ def main() -> None:
                     _wv_window.on_top = True
                     time.sleep(0.15)
                     _wv_window.on_top = False
-                except Exception:
+                except (AttributeError, RuntimeError, OSError):
                     pass
             threading.Thread(target=_bring_to_front, daemon=True).start()
 

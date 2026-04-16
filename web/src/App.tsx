@@ -380,7 +380,7 @@ export default function App() {
     }, []);
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-primary-50">
             {/* 顶栏 */}
             <header className="bg-white/80 backdrop-blur border-b border-slate-200 sticky top-0 z-10">
                 <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
@@ -411,7 +411,7 @@ export default function App() {
                                 to={item.to}
                                 className={`p-2 rounded-lg transition-colors flex items-center gap-1.5 text-sm ${
                                     location.pathname === item.to
-                                        ? "bg-blue-50 text-blue-600"
+                                        ? "bg-primary-50 text-primary-600"
                                         : "hover:bg-slate-100 text-slate-500"
                                 }`}
                                 title={item.label}
@@ -478,7 +478,7 @@ export default function App() {
             {updateToast && (updateToast.status === "ready" || updateToast.status === "downloading") && (
                 <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-white border border-slate-200 rounded-xl shadow-lg p-4 flex items-start gap-3">
                     {updateToast.status === "downloading" ? (
-                        <Loader2 className="w-5 h-5 text-blue-500 animate-spin shrink-0 mt-0.5"/>
+                        <Loader2 className="w-5 h-5 text-primary-500 animate-spin shrink-0 mt-0.5"/>
                     ) : (
                         <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5"/>
                     )}
@@ -491,7 +491,7 @@ export default function App() {
                         {updateToast.status === "downloading" && (
                             <div className="w-full h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden">
                                 <div
-                                    className="h-full bg-blue-500 rounded-full transition-all"
+                                    className="h-full bg-primary-500 rounded-full transition-all"
                                     style={{width: `${updateToast.progress}%`}}
                                 />
                             </div>
@@ -608,13 +608,13 @@ function ProcessingFlow({
                             )}
                             <div
                                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
-                                    active ? "bg-blue-600 text-white"
+                                    active ? "bg-primary-600 text-white"
                                         : completed ? "bg-emerald-500 text-white"
                                             : "bg-slate-200 text-slate-500"
                                 }`}>
                                 {completed ? <CheckCircle className="w-4 h-4"/> : i + 1}
                             </div>
-                            <span className={`text-sm ${active ? "text-blue-700 font-medium" : "text-slate-500"}`}>
+                            <span className={`text-sm ${active ? "text-primary-700 font-medium" : "text-slate-500"}`}>
                                 {label}
                             </span>
                         </div>
@@ -648,7 +648,7 @@ function ProcessingFlow({
                                     onClick={() => setDocType(key)}
                                     className={`p-3 rounded-xl border text-left transition-all text-sm ${
                                         docType === key
-                                            ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                                            ? "border-primary-500 bg-primary-50 text-primary-700 shadow-sm"
                                             : "border-slate-200 hover:border-slate-300 text-slate-600"
                                     }`}
                                 >
@@ -666,7 +666,7 @@ function ProcessingFlow({
                         {/* 拖放上传区 */}
                         <div
                             className={`${scanAvailable ? "col-span-2" : ""} bg-white rounded-2xl shadow-sm border-2 border-dashed transition-colors p-12 text-center cursor-pointer ${
-                                dragging ? "border-blue-500 bg-blue-50" : "border-slate-300 hover:border-blue-400"
+                                dragging ? "border-primary-500 bg-primary-50" : "border-slate-300 hover:border-primary-400"
                             }`}
                             onClick={() => inputRef.current?.click()}
                             onDragOver={(e) => e.preventDefault()}
@@ -682,7 +682,7 @@ function ProcessingFlow({
                                 className="hidden"
                                 onChange={handleFileSelect}
                             />
-                            <Upload className={`w-12 h-12 mx-auto mb-4 ${dragging ? "text-blue-500" : "text-slate-400"}`}/>
+                            <Upload className={`w-12 h-12 mx-auto mb-4 ${dragging ? "text-primary-500" : "text-slate-400"}`}/>
                             <p className="text-slate-600 font-medium">{t("upload.hint")}</p>
                             <p className="text-sm text-slate-400 mt-2">{t("upload.supported")}</p>
                         </div>
@@ -736,7 +736,7 @@ function ProcessingFlow({
                                 <p className="text-sm font-medium text-slate-600">
                                     {t("upload.files_selected").replace("{n}", String(files.length))}
                                     {isProcessing && (
-                                        <span className="ml-2 inline-flex items-center gap-1 text-blue-600">
+                                        <span className="ml-2 inline-flex items-center gap-1 text-primary-600">
                                             <Loader2 className="w-3.5 h-3.5 animate-spin"/>
                                             {t("upload.file_processing")}
                                         </span>
@@ -746,7 +746,7 @@ function ProcessingFlow({
                                     {hasWaiting && !isProcessing && (
                                         <button
                                             onClick={handleProcess}
-                                            className="px-5 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 text-sm"
+                                            className="px-5 py-2 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors font-medium flex items-center gap-2 text-sm"
                                         >
                                             <Play className="w-4 h-4"/>
                                             {t("upload.start")}
@@ -778,13 +778,13 @@ function ProcessingFlow({
                                              entry.status === "success"
                                                  ? "hover:bg-emerald-50 cursor-pointer"
                                                  : "hover:bg-slate-50"
-                                         } ${selectedFileIndex === idx ? "ring-2 ring-blue-400 bg-blue-50" : ""}`}
+                                         } ${selectedFileIndex === idx ? "ring-2 ring-primary-400 bg-primary-50" : ""}`}
                                          onClick={() => entry.status === "success" && handleSelectFile(idx)}
                                     >
                                         <div className="flex items-center gap-3 px-3 py-2.5">
                                             {/* 状态图标 */}
                                             {entry.status === "processing" ? (
-                                                <Loader2 className="w-4 h-4 shrink-0 text-blue-500 animate-spin"/>
+                                                <Loader2 className="w-4 h-4 shrink-0 text-primary-500 animate-spin"/>
                                             ) : entry.status === "success" ? (
                                                 <CheckCircle className="w-4 h-4 shrink-0 text-emerald-500"/>
                                             ) : entry.status === "error" ? (
@@ -801,7 +801,7 @@ function ProcessingFlow({
                                                     {(entry.file.size / 1024).toFixed(1)} KB
                                                     {entry.progressStage && (
                                                         <span
-                                                            className="ml-2 text-blue-500">{entry.progressStage}</span>
+                                                            className="ml-2 text-primary-500">{entry.progressStage}</span>
                                                     )}
                                                     {entry.result && (
                                                         <span className="ml-2 text-emerald-600">
@@ -813,7 +813,7 @@ function ProcessingFlow({
                                             {/* 百分比 */}
                                             {(entry.status === "processing" || entry.status === "paused") && (
                                                 <span
-                                                    className="text-xs font-mono text-blue-600 w-10 text-right shrink-0">
+                                                    className="text-xs font-mono text-primary-600 w-10 text-right shrink-0">
                                                     {entry.progress}%
                                                 </span>
                                             )}
@@ -873,7 +873,7 @@ function ProcessingFlow({
                                             <div className="h-1 bg-slate-100">
                                                 <div
                                                     className={`h-full transition-all duration-500 ${
-                                                        entry.status === "paused" ? "bg-amber-400" : "bg-blue-500"
+                                                        entry.status === "paused" ? "bg-amber-400" : "bg-primary-500"
                                                     }`}
                                                     style={{width: `${entry.progress}%`}}
                                                 />
@@ -896,7 +896,7 @@ function ProcessingFlow({
             {/* ===== 填充中 ===== */}
             {view === "filling" && (
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-16 text-center">
-                    <Loader2 className="w-12 h-12 text-blue-500 mx-auto mb-4 animate-spin"/>
+                    <Loader2 className="w-12 h-12 text-primary-500 mx-auto mb-4 animate-spin"/>
                     <p className="text-lg text-slate-700 font-medium">{t("processing.filling")}</p>
                     <p className="text-sm text-slate-400 mt-2">{t("processing.hint")}</p>
                 </div>
@@ -908,7 +908,7 @@ function ProcessingFlow({
                     {/* 返回主页按钮 */}
                     <button
                         onClick={handleGoHome}
-                        className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
+                        className="text-sm text-primary-600 hover:text-primary-800 flex items-center gap-1 transition-colors"
                     >
                         <Home className="w-4 h-4"/>
                         {t("step.upload")}
@@ -923,7 +923,7 @@ function ProcessingFlow({
                                     onClick={() => handleSelectFile(idx)}
                                     className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
                                         selectedFileIndex === idx
-                                            ? "bg-blue-600 text-white"
+                                            ? "bg-primary-600 text-white"
                                             : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                                     }`}
                                 >
@@ -935,15 +935,15 @@ function ProcessingFlow({
 
                     {/* 自动分类结果 */}
                     {selectedFile?.classifyInfo && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-center gap-3">
+                        <div className="bg-primary-50 border border-primary-200 rounded-2xl p-4 flex items-center gap-3">
                             {DOC_ICONS[selectedFile.classifyInfo.doc_type] || <FileText className="w-5 h-5"/>}
                             <div className="text-left">
-                                <p className="text-sm font-medium text-blue-800">
+                                <p className="text-sm font-medium text-primary-800">
                                     {t("review.classify")}: {DOC_TYPE_KEYS[selectedFile.classifyInfo.doc_type] ? t(DOC_TYPE_KEYS[selectedFile.classifyInfo.doc_type]) : selectedFile.classifyInfo.doc_type}
                                     <span
-                                        className="ml-2 text-xs text-blue-500">({selectedFile.classifyInfo.confidence})</span>
+                                        className="ml-2 text-xs text-primary-500">({selectedFile.classifyInfo.confidence})</span>
                                 </p>
-                                <p className="text-xs text-blue-600">{selectedFile.classifyInfo.description}</p>
+                                <p className="text-xs text-primary-600">{selectedFile.classifyInfo.description}</p>
                             </div>
                         </div>
                     )}
@@ -1162,7 +1162,7 @@ function ProcessingFlow({
                         <a
                             href={fillResult.download_url}
                             download
-                            className="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium inline-flex items-center gap-2"
+                            className="px-6 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors font-medium inline-flex items-center gap-2"
                         >
                             <Download className="w-4 h-4"/>
                             {t("done.download")}

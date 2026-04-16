@@ -1,5 +1,36 @@
 @import "tailwindcss";
 
+/*
+ * 主题色变量：切换主题只需修改 :root 下的值，
+ * 或添加 [data-theme="xxx"] 选择器覆盖。
+ */
+:root {
+    --theme-primary-50: #f5f0ff;
+    --theme-primary-100: #ece0ff;
+    --theme-primary-200: #dcc5ff;
+    --theme-primary-300: #c9a3ff;
+    --theme-primary-400: #bd7fff;
+    --theme-primary-500: #a855f7;
+    --theme-primary-600: #9333ea;
+    --theme-primary-700: #7e22ce;
+    --theme-primary-800: #6b21a8;
+    --theme-primary-900: #581c87;
+}
+
+/* 将 CSS 变量桥接到 Tailwind 的 primary-* 工具类 */
+@theme {
+    --color-primary-50: var(--theme-primary-50);
+    --color-primary-100: var(--theme-primary-100);
+    --color-primary-200: var(--theme-primary-200);
+    --color-primary-300: var(--theme-primary-300);
+    --color-primary-400: var(--theme-primary-400);
+    --color-primary-500: var(--theme-primary-500);
+    --color-primary-600: var(--theme-primary-600);
+    --color-primary-700: var(--theme-primary-700);
+    --color-primary-800: var(--theme-primary-800);
+    --color-primary-900: var(--theme-primary-900);
+}
+
 body {
     margin: 0;
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;

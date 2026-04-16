@@ -151,7 +151,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
 
             {loading ? (
                 <div className="p-12 text-center">
-                    <Loader2 className="w-8 h-8 text-blue-500 mx-auto animate-spin"/>
+                    <Loader2 className="w-8 h-8 text-primary-500 mx-auto animate-spin"/>
                     <p className="text-sm text-slate-500 mt-2">{t("settings.loading")}</p>
                 </div>
             ) : (
@@ -176,7 +176,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                             ? t("settings.api_key_placeholder")
                                             : "sk-..."
                                     }
-                                    className="w-full px-4 py-2.5 pr-10 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                    className="w-full px-4 py-2.5 pr-10 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
                                 />
                                 <button
                                     type="button"
@@ -209,7 +209,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                         key={m.id}
                                         className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
                                             selectedModel === m.id
-                                                ? "border-blue-500 bg-blue-50"
+                                                ? "border-primary-500 bg-primary-50"
                                                 : "border-slate-200 hover:border-slate-300"
                                         }`}
                                     >
@@ -240,7 +240,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             onClick={(e) => e.stopPropagation()}
-                                            className="text-blue-500 hover:text-blue-700 shrink-0"
+                                            className="text-primary-500 hover:text-primary-700 shrink-0"
                                             title={t("settings.view_pricing")}
                                         >
                                             <ExternalLink className="w-4 h-4"/>
@@ -264,7 +264,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                     value={baseUrl}
                                     onChange={(e) => setBaseUrl(e.target.value)}
                                     placeholder={t("settings.base_url_placeholder")}
-                                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
                                 />
                                 <p className="text-xs text-slate-400 mt-1">
                                     {t("settings.base_url_hint")}
@@ -302,7 +302,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                     }}
                                     disabled={autostartLoading}
                                     className={`relative w-11 h-6 rounded-full transition-colors ${
-                                        autostart ? "bg-blue-600" : "bg-slate-300"
+                                        autostart ? "bg-primary-600" : "bg-slate-300"
                                     }`}
                                 >
                                     <span
@@ -327,7 +327,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                         }}
                                         className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-xl border transition-all ${
                                             closeBehavior === "minimize_to_tray"
-                                                ? "border-blue-500 bg-blue-50 text-blue-700"
+                                                ? "border-primary-500 bg-primary-50 text-primary-700"
                                                 : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
                                         }`}
                                     >
@@ -344,7 +344,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                         }}
                                         className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-xl border transition-all ${
                                             closeBehavior === "exit"
-                                                ? "border-blue-500 bg-blue-50 text-blue-700"
+                                                ? "border-primary-500 bg-primary-50 text-primary-700"
                                                 : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
                                         }`}
                                     >
@@ -400,7 +400,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                         } catch (err) { setError(extractErrorMessage(err)); }
                                     }}
                                     className={`relative w-11 h-6 rounded-full transition-colors ${
-                                        autoUpdate ? "bg-blue-600" : "bg-slate-300"
+                                        autoUpdate ? "bg-primary-600" : "bg-slate-300"
                                     }`}
                                 >
                                     <span
@@ -426,7 +426,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                         onClick={() => setLanguage(opt.value)}
                                         className={`flex-1 px-4 py-2.5 text-sm font-medium rounded-xl border transition-all ${
                                             language === opt.value
-                                                ? "border-blue-500 bg-blue-50 text-blue-700"
+                                                ? "border-primary-500 bg-primary-50 text-primary-700"
                                                 : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
                                         }`}
                                     >
@@ -499,9 +499,9 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                             </p>
                         )}
                         {versionInfo?.has_update && (
-                            <div className="bg-blue-50 rounded-lg px-3 py-2 space-y-2">
+                            <div className="bg-primary-50 rounded-lg px-3 py-2 space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <p className="text-sm text-blue-700">
+                                    <p className="text-sm text-primary-700">
                                         {t("settings.update_available").replace("{version}", versionInfo.latest ?? "")}
                                     </p>
                                     <button
@@ -511,7 +511,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                             setUpdateStatus(s);
                                         }}
                                         disabled={updateStatus?.status === "downloading"}
-                                        className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 disabled:opacity-50"
+                                        className="text-sm text-primary-600 hover:text-primary-800 font-medium flex items-center gap-1 disabled:opacity-50"
                                     >
                                         {updateStatus?.status === "downloading" ? (
                                             <Loader2 className="w-3.5 h-3.5 animate-spin"/>
@@ -539,7 +539,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                         <button
                             onClick={handleSave}
                             disabled={saving}
-                            className="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
+                            className="px-6 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
                         >
                             {saving ? (
                                 <Loader2 className="w-4 h-4 animate-spin"/>
