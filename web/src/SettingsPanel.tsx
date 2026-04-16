@@ -581,6 +581,15 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                     <button
                                         onClick={async () => {
                                             await triggerUpdateDownload();
+                                            const poll = setInterval(async () => {
+                                                try {
+                                                    const s = await getUpdateStatus();
+                                                    setUpdateStatus(s);
+                                                    if (s.status !== "downloading") clearInterval(poll);
+                                                } catch {
+                                                    clearInterval(poll);
+                                                }
+                                            }, 1500);
                                             const s = await getUpdateStatus();
                                             setUpdateStatus(s);
                                         }}
@@ -598,6 +607,12 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                 {updateStatus?.status === "ready" && (
                                     <p className="text-xs text-emerald-600 flex items-center gap-1">
                                         <CheckCircle className="w-3.5 h-3.5"/>
+                                        {updateStatus.message}
+                                    </p>
+                                )}
+                                {updateStatus?.status === "error" && (
+                                    <p className="text-xs text-red-500 flex items-center gap-1">
+                                        <AlertCircle className="w-3.5 h-3.5"/>
                                         {updateStatus.message}
                                     </p>
                                 )}
