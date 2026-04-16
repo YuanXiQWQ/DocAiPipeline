@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import uuid
 from contextlib import asynccontextmanager
@@ -137,9 +138,9 @@ APP_VERSION = app.version
 
 
 def _is_desktop() -> bool:
-    """是否以 PyInstaller 打包的桌面模式运行。"""
+    """是否以桌面模式运行（PyInstaller 打包 或 launcher.py 启动）。"""
     import sys
-    return getattr(sys, "frozen", False)
+    return getattr(sys, "frozen", False) or os.environ.get("DOCAI_DESKTOP") == "1"
 
 
 @app.get("/api/platform")

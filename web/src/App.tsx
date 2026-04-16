@@ -474,11 +474,6 @@ export default function App() {
                 </Routes>
             </main>
 
-            {/* 底栏 */}
-            <footer className="text-center text-sm text-slate-400 py-6 mt-auto">
-                {t("footer.powered")} DocAI Pipeline &copy; {new Date().getFullYear()}
-            </footer>
-
             {/* ===== 更新通知 toast（右下角） ===== */}
             {updateToast && (updateToast.status === "ready" || updateToast.status === "downloading") && (
                 <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-white border border-slate-200 rounded-xl shadow-lg p-4 flex items-start gap-3">

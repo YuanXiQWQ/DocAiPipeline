@@ -14,8 +14,8 @@
 from __future__ import annotations
 
 import os
-import sys
 import socket
+import sys
 import threading
 import time
 import webbrowser
@@ -33,6 +33,7 @@ APP_NAME = "DocAI Pipeline"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
 ICON_FILE = "icon.ico"
+ICON_PNG = "icon.png"
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 860
 
@@ -176,69 +177,102 @@ def _show_splash(base: Path) -> tuple[Any, Any]:
         return None, lambda: None
 
     root = tk.Tk()
-    root.overrideredirect(True)  # 无标题栏
+    root.overrideredirect(True)
     root.attributes("-topmost", True)
 
-    # 窗口尺寸与居中
-    sw, sh = 420, 260
+    sw, sh = 620, 360
     x = (root.winfo_screenwidth() - sw) // 2
     y = (root.winfo_screenheight() - sh) // 2
     root.geometry(f"{sw}x{sh}+{x}+{y}")
 
-    # 背景：渐变蓝色（用 Canvas 模拟）
     canvas = tk.Canvas(root, width=sw, height=sh, highlightthickness=0)
     canvas.pack(fill="both", expand=True)
 
-    # 绘制渐变背景（从深蓝到浅蓝）
+    # ── 背景渐变（浅薰衣草 → 淡紫白，整体偏浅） ──
     for i in range(sh):
         ratio = i / sh
-        r = int(30 + 190 * ratio)
-        g = int(64 + 160 * ratio)
-        b = int(175 + 60 * ratio)
-        color = f"#{r:02x}{g:02x}{b:02x}"
-        canvas.create_line(0, i, sw, i, fill=color)
+        r = int(235 + 15 * ratio)   # eb → fa
+        g = int(218 + 25 * ratio)   # da → f3
+        b = int(250 + 5 * ratio)    # fa → ff
+        canvas.create_line(0, i, sw, i, fill=f"#{r:02x}{g:02x}{b:02x}")
 
-    # 尝试加载图标
-    icon_path = base / "icon.ico"
+    # ── 直线几何装饰（对角色块） ──
+    # 左上三角：淡紫色
+    canvas.create_polygon(
+        0, 0, sw * 0.45, 0, 0, sh * 0.55,
+        fill="#e4d0f8", outline="",
+    )
+    # 右下三角：浅紫色
+    canvas.create_polygon(
+        sw, sh, sw * 0.5, sh, sw, sh * 0.35,
+        fill="#dcc5f5", outline="",
+    )
+    # 水平装饰线（细，浅紫）
+    line_y = int(sh * 0.68)
+    canvas.create_line(0, line_y, sw, line_y, fill="#d4b8f0", width=1)
+
+    # ── 图标 + 标题 + 作者（居中） ──
+    icon_size = 88
+    # 整组内容水平居中：图标宽 + 间距 + 文字区
+    group_gap = 28
+    # 估算文字区宽度 ≈ 300
+    group_w = icon_size + group_gap + 300
+    group_left = (sw - group_w) // 2
+    center_y = sh * 0.42  # 略偏上，给底部留空间
+
+    icon_cx = group_left + icon_size // 2
+    icon_cy = int(center_y)
+
     photo = None
+    icon_path = base / ICON_PNG
+    if not icon_path.exists():
+        icon_path = base / ICON_FILE
     if icon_path.exists():
         try:
-            from PIL import Image, ImageTk
-            img = Image.open(str(icon_path))
-            img = img.resize((64, 64), Image.Resampling.LANCZOS)
+            from PIL import Image, ImageTk, ImageDraw
+
+            img = Image.open(str(icon_path)).convert("RGBA")
+            img = img.resize((icon_size, icon_size), Image.Resampling.LANCZOS)
+
+            # 圆角蒙版
+            mask = Image.new("L", (icon_size, icon_size), 0)
+            draw = ImageDraw.Draw(mask)
+            draw.rounded_rectangle(
+                [0, 0, icon_size - 1, icon_size - 1],
+                radius=18, fill=255,
+            )
+            img.putalpha(mask)
+
             photo = ImageTk.PhotoImage(img)
-            canvas.create_image(sw // 2, 70, image=photo)
-        except (ImportError, OSError, ValueError):  # Pillow/tkinter 异常
+            canvas.create_image(icon_cx, icon_cy, image=photo)
+        except (ImportError, OSError, ValueError):
             pass
 
-    # 应用名称
-    canvas.create_text(sw // 2, 130, text=APP_NAME,
-                       font=("Segoe UI", 22, "bold"), fill="white")
-    # 作者
-    canvas.create_text(sw // 2, 165, text="by YuanXiQWQ",
-                       font=("Segoe UI", 11), fill="#d0e0f0")
-    # 加载提示
-    _loading_text = canvas.create_text(
-        sw // 2, 220, text="正在启动服务…",
-        font=("Segoe UI", 9), fill="#c0d8f0")
+    # 文字区左边缘
+    text_x = group_left + icon_size + group_gap
 
-    # 保持引用防止被 GC，用 dict 避免访问 protected 成员
+    # 应用名称
+    canvas.create_text(
+        text_x, icon_cy - 14, text=APP_NAME, anchor="w",
+        font=("Segoe UI", 28, "bold"), fill="#4a1a7a",
+    )
+    # 作者
+    canvas.create_text(
+        text_x, icon_cy + 24, text="by YuanXiQWQ", anchor="w",
+        font=("Segoe UI", 13), fill="#8b5fbf",
+    )
+
+    # 保持引用
     _splash_state["photo"] = photo
-    _splash_state["loading_text_id"] = _loading_text
     _splash_state["canvas"] = canvas
 
     root.update()
     return root, lambda: root.destroy()
 
 
-def _update_splash_text(root: Any, text: str) -> None:
-    """更新闪屏窗口的加载提示文字。"""
-    canvas = _splash_state.get("canvas")
-    text_id = _splash_state.get("loading_text_id")
-    if canvas is None or text_id is None:
-        return
+def _update_splash_text(root: Any, _text: str, progress: float = 0.0) -> None:
+    """刷新闪屏窗口（保持窗口响应）。"""
     try:
-        canvas.itemconfig(text_id, text=text)  # type: ignore[union-attr]
         root.update()
     except (AttributeError, RuntimeError):
         pass
@@ -330,6 +364,9 @@ def main() -> None:
     if sys.stderr is None:
         sys.stderr = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
 
+    # 标记桌面模式（让后端 API 识别）
+    os.environ["DOCAI_DESKTOP"] = "1"
+
     # 设置工作目录为 ai-service 根（确保 .env / user_settings.json 可被找到）
     base = _base_dir()
     os.chdir(base)
@@ -412,13 +449,15 @@ def main() -> None:
     if _has_webview:
         # pywebview 原生窗口模式
         assert _webview is not None
+        # 窗口图标：pywebview(Windows) 只支持 .ico 格式
+        _icon_path = base / ICON_FILE
         _wv_window = _webview.create_window(
             APP_NAME,
             url,
             width=win_w,
             height=win_h,
             min_size=(800, 600),
-            confirm_close=True,  # 允许 closing 事件取消关闭
+            confirm_close=True,
         )
 
         def _on_closing() -> bool:
@@ -439,9 +478,22 @@ def main() -> None:
             """窗口真正关闭后触发。"""
             shutdown_event.set()
 
+        def _on_loaded() -> None:
+            """窗口加载完成后置前获取焦点。"""
+            def _bring_to_front() -> None:
+                assert _wv_window is not None
+                try:
+                    _wv_window.on_top = True
+                    time.sleep(0.15)
+                    _wv_window.on_top = False
+                except Exception:
+                    pass
+            threading.Thread(target=_bring_to_front, daemon=True).start()
+
         assert _wv_window is not None
         _wv_window.events.closing += _on_closing
         _wv_window.events.closed += _on_closed
+        _wv_window.events.loaded += _on_loaded
 
         # 启动托盘（后台线程）
         tray_thread = threading.Thread(
@@ -454,12 +506,13 @@ def main() -> None:
         # webview.start() 会阻塞主线程直到窗口关闭
         # Windows 上优先使用 EdgeChromium（系统自带 WebView2）
         logger.info("正在打开应用窗口…")
+        _icon_str = str(_icon_path) if _icon_path.exists() else None
         # noinspection PyBroadException
         try:
-            _webview.start(gui="edgechromium")
+            _webview.start(gui="edgechromium", icon=_icon_str)
         except Exception:
             # 若 edgechromium 不可用，尝试默认后端
-            _webview.start()
+            _webview.start(icon=_icon_str)
 
     else:
         # 回退到浏览器模式

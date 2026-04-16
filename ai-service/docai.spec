@@ -22,8 +22,9 @@ datas = [
     (str(BASE / "web_dist"), "web_dist"),
     # .env.example 作为默认配置参考
     (str(BASE / ".env.example"), "."),
-    # 应用图标（系统托盘用）
+    # 应用图标（系统托盘 + 窗口图标 + 闪屏）
     (str(BASE / "icon.ico"), "."),
+    (str(BASE / "icon.png"), "."),
 ]
 
 # 版本号文件（CI 构建时生成）
