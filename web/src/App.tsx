@@ -384,27 +384,29 @@ export default function App() {
             {/* 顶栏 */}
             <header className="bg-white/80 backdrop-blur border-b border-slate-200 sticky top-0 z-10">
                 <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
-                    <button onClick={() => {
-                        handleGoHome();
-                        navigate("/");
-                    }} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-                        <ScanLine className="w-7 h-7 text-emerald-600"/>
-                        <h1 className="text-lg font-semibold text-slate-800">
-                            {t("app.title")}
-                        </h1>
-                    </button>
-                    <div className="flex items-center gap-1">
-                        <p className="text-sm text-slate-500 hidden sm:block mr-2">
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => {
+                            handleGoHome();
+                            navigate("/");
+                        }} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                            <ScanLine className="w-7 h-7 text-emerald-600"/>
+                            <h1 className="text-lg font-semibold text-slate-800">
+                                {t("app.title")}
+                            </h1>
+                        </button>
+                        <p className="text-sm text-slate-500 hidden sm:block">
                             {t("app.subtitle")}
                         </p>
                         {backendOk !== null && (
                             <span
-                                className={`w-2 h-2 rounded-full mr-2 ${
+                                className={`w-2 h-2 rounded-full ${
                                     backendOk ? "bg-emerald-500" : "bg-red-400"
                                 }`}
                                 title={backendOk ? t("error.backend_online") : t("error.backend_offline")}
                             />
                         )}
+                    </div>
+                    <div className="flex items-center gap-1">
                         {navItems.map((item) => (
                             <Link
                                 key={item.to}
