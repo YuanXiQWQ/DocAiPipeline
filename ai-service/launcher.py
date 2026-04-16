@@ -60,6 +60,8 @@ def _wait_for_server(host: str, port: int, timeout: float = 30.0) -> bool:
     """等待服务器就绪。"""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
+        if _splash_cancelled():
+            return False
         try:
             with socket.create_connection((host, port), timeout=1):
                 return True
@@ -166,7 +168,12 @@ def _load_prefs() -> dict:
 # Splash 闪屏窗口（tkinter，无额外依赖）
 # ------------------------------------------------------------------
 
-_splash_state: dict[str, Any] = {}  # 保持 tkinter 对象引用防止 GC
+_splash_state: dict[str, Any] = {"cancelled": False}  # 保持 tkinter 对象引用防止 GC
+
+
+def _splash_cancelled() -> bool:
+    """用户是否在闪屏阶段取消了启动。"""
+    return bool(_splash_state.get("cancelled"))
 
 
 def _show_splash(base: Path) -> tuple[Any, Any]:
@@ -261,12 +268,34 @@ def _show_splash(base: Path) -> tuple[Any, Any]:
         font=("Segoe UI", 13), fill="#8b5fbf",
     )
 
+    # ── 右上角关闭按钮（纯 × 线条） ──
+    btn_size = 28
+    btn_margin = 8
+    bx1, by1 = sw - btn_margin - btn_size, btn_margin
+    bx2, by2 = sw - btn_margin, btn_margin + btn_size
+    pad = 6
+    canvas.create_line(bx1 + pad, by1 + pad, bx2 - pad, by2 - pad, fill="#8b5fbf", width=2, tags="close_btn")
+    canvas.create_line(bx1 + pad, by2 - pad, bx2 - pad, by1 + pad, fill="#8b5fbf", width=2, tags="close_btn")
+
+    def _on_close_click(_evt: Any) -> None:
+        _splash_state["cancelled"] = True
+        root.destroy()
+
+    canvas.tag_bind("close_btn", "<Button-1>", _on_close_click)
+
     # 保持引用
     _splash_state["photo"] = photo
     _splash_state["canvas"] = canvas
 
     root.update()
-    return root, lambda: root.destroy()
+
+    def _safe_destroy() -> None:
+        try:
+            root.destroy()
+        except (RuntimeError, Exception):
+            pass
+
+    return root, _safe_destroy
 
 
 def _update_splash_text(root: Any, _text: str) -> None:
@@ -376,6 +405,10 @@ def main() -> None:
     # 显示 Splash 闪屏
     splash_root, splash_destroy = _show_splash(base)
 
+    if _splash_cancelled():
+        logger.info("用户在闪屏阶段取消了启动")
+        return
+
     # 查找可用端口
     port = _find_free_port(DEFAULT_PORT)
     host = DEFAULT_HOST
@@ -415,9 +448,19 @@ def main() -> None:
     if splash_root:
         _update_splash_text(splash_root, "正在加载模型…")
 
+    if _splash_cancelled():
+        logger.info("用户在闪屏阶段取消了启动")
+        server.should_exit = True
+        return
+
     if not _wait_for_server(host, port):
         logger.error("服务启动超时！")
         splash_destroy()
+        return
+
+    if _splash_cancelled():
+        logger.info("用户在闪屏阶段取消了启动")
+        server.should_exit = True
         return
 
     logger.info(f"服务已就绪: {url}")
