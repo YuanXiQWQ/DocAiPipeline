@@ -4,6 +4,15 @@
 
 > 基于多模态大模型 (VLM) 的文档自动识别与智能归档系统 — 覆盖原木进口→加工→打包全生命周期单据。
 
+## 目录
+
+- [功能概览](#功能概览)
+- [项目结构](#项目结构)
+- [快速开始](#快速开始)
+- [API 接口](#api-接口)
+- [技术栈](#技术栈)
+- [许可证](#许可证)
+
 ## 功能概览
 
 | 文档类型           | 输入       | 输出           |
@@ -63,6 +72,7 @@ DocAiPipeline/
 │   │   ├── SettingsPanel.tsx    # 设置面板（自动保存）
 │   │   ├── api.ts               # API 服务层
 │   │   ├── i18n.ts              # 轻量 i18n 引擎
+│   │   ├── units.ts             # 单位常量与换算工具
 │   │   └── lang/                # 翻译文件 (zh-CN / en / sr)
 │   └── package.json
 ├── build_desktop.py             # 一键构建桌面 .exe 脚本
@@ -150,12 +160,13 @@ docker compose up --build
 
 ### Excel 填充
 
-| 方法     | 路径                          | 说明                |
-|--------|-----------------------------|-------------------|
-| `POST` | `/api/fill`                 | 识别结果 → Excel 自动填充 |
-| `GET`  | `/api/templates`            | 列出已上传的 Excel 模板   |
-| `POST` | `/api/templates/{doc_type}` | 上传 Excel 模板       |
-| `GET`  | `/api/download/{filename}`  | 下载填充后的文件          |
+| 方法     | 路径                          | 说明                   |
+|--------|-----------------------------|----------------------|
+| `POST` | `/api/fill`                 | 识别结果 → Excel 自动填充    |
+| `GET`  | `/api/templates`            | 列出已上传的 Excel 模板      |
+| `POST` | `/api/templates/{doc_type}` | 上传 Excel 模板          |
+| `GET`  | `/api/download/{filename}`  | 下载填充后的文件             |
+| `POST` | `/api/open-file/{filename}` | 在系统文件管理器中定位文件（桌面端专用） |
 
 ### 历史记录
 
@@ -191,20 +202,23 @@ docker compose up --build
 
 ### 桌面专属
 
-| 方法     | 路径                     | 说明       |
-|--------|------------------------|----------|
-| `GET`  | `/api/scan/devices`    | 列出可用扫描仪  |
-| `POST` | `/api/scan/acquire`    | 执行扫描     |
-| `GET`  | `/api/autostart`       | 获取开机自启状态 |
-| `PUT`  | `/api/autostart`       | 设置开机自启   |
-| `GET`  | `/api/close-behavior`  | 获取关闭窗口行为 |
-| `PUT`  | `/api/close-behavior`  | 设置关闭窗口行为 |
-| `POST` | `/api/reset-window`    | 重置窗口大小   |
-| `GET`  | `/api/version`         | 检查更新     |
-| `GET`  | `/api/auto-update`     | 获取自动更新偏好 |
-| `PUT`  | `/api/auto-update`     | 设置自动更新偏好 |
-| `POST` | `/api/update/download` | 触发后台下载更新 |
-| `GET`  | `/api/update/status`   | 获取更新下载状态 |
+| 方法     | 路径                          | 说明              |
+|--------|-----------------------------|-----------------|
+| `GET`  | `/api/scan/devices`         | 列出可用扫描仪         |
+| `POST` | `/api/scan/acquire`         | 执行扫描            |
+| `GET`  | `/api/scan/file/{filename}` | 获取扫描生成的图像文件     |
+| `POST` | `/api/browse-folder`        | 弹出文件夹选择对话框（桌面端） |
+| `GET`  | `/api/autostart`            | 获取开机自启状态        |
+| `PUT`  | `/api/autostart`            | 设置开机自启          |
+| `GET`  | `/api/close-behavior`       | 获取关闭窗口行为        |
+| `PUT`  | `/api/close-behavior`       | 设置关闭窗口行为        |
+| `POST` | `/api/reset-window`         | 重置窗口大小          |
+| `GET`  | `/api/version`              | 检查更新            |
+| `GET`  | `/api/auto-update`          | 获取自动更新偏好        |
+| `PUT`  | `/api/auto-update`          | 设置自动更新偏好        |
+| `POST` | `/api/update/download`      | 触发后台下载更新        |
+| `GET`  | `/api/update/status`        | 获取更新下载状态        |
+| `POST` | `/api/update/restart`       | 重启并应用更新（桌面端）    |
 
 完整 API 文档：启动后端后访问 `http://localhost:8000/docs`
 
@@ -215,13 +229,18 @@ docker compose up --build
 | 技术                   | 用途                                                    |
 |----------------------|-------------------------------------------------------|
 | **Python 3.11+**     | 后端主语言                                                 |
-| **FastAPI**          | 异步 REST API 框架，提供文档处理、设置管理、历史查询等 35+ 个端点              |
+| **FastAPI**          | 异步 REST API 框架，提供文档处理、设置管理、历史查询等 42+ 个端点              |
 | **OpenAI VLM**       | 多模态大模型（gpt-4.1-mini / gpt-4.1 等），用于文档分类、结构化信息抽取和手写识别  |
 | **Ultralytics YOLO** | 多文档检测与分割，从合并扫描件中定位单独文档区域                              |
 | **OpenCV**           | 图像预处理管线（去噪、纠偏、对比度增强、锐化）                               |
 | **PyMuPDF (fitz)**   | PDF 解析，将 PDF 页面转换为高分辨率图像                              |
 | **Pydantic**         | 请求/响应数据模型校验                                           |
 | **httpx**            | 异步 HTTP 客户端，用于 API Key 测试、GitHub Release 检查、汇率查询等外部请求 |
+| **sse-starlette**    | SSE（Server-Sent Events）实时推送批量处理进度                     |
+| **Pillow**           | 图像格式转换与托盘图标生成                                         |
+| **NumPy**            | 图像矩阵运算，配合 OpenCV 使用                                   |
+| **pandas**           | 数据表处理辅助                                               |
+| **loguru**           | 结构化日志记录                                               |
 
 ### 存储与数据
 
@@ -241,6 +260,7 @@ docker compose up --build
 | **TailwindCSS v4** | 原子化 CSS 样式                         |
 | **Lucide Icons**   | UI 图标库                             |
 | **React Router**   | SPA 路由，管理主页/数据看板/历史/设置四个页面         |
+| **Axios**          | HTTP 客户端，封装后端 API 调用               |
 | **自研 i18n**        | 轻量国际化引擎，支持中文/English/Srpski 三语实时切换 |
 
 ### 桌面端与部署

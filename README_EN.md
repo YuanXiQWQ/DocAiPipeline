@@ -5,6 +5,15 @@
 > VLM-powered document recognition and intelligent archiving system — covering the full lifecycle of timber import →
 > processing → packaging.
 
+## Table of Contents
+
+- [Features](#features)
+- [Project Structure](#project-structure)
+- [Quick Start](#quick-start)
+- [API Endpoints](#api-endpoints)
+- [Tech Stack](#tech-stack)
+- [License](#license)
+
 ## Features
 
 | Document Type                          | Input       | Output                       |
@@ -65,6 +74,7 @@ DocAiPipeline/
 │   │   ├── SettingsPanel.tsx    # Settings panel (auto-save)
 │   │   ├── api.ts               # API service layer
 │   │   ├── i18n.ts              # Lightweight i18n engine
+│   │   ├── units.ts             # Unit constants & conversion utilities
 │   │   └── lang/                # Translation files (zh-CN / en / sr)
 │   └── package.json
 ├── build_desktop.py             # One-click desktop .exe build script
@@ -153,12 +163,13 @@ docker compose up --build
 
 ### Excel Filling
 
-| Method | Path                        | Description                          |
-|--------|-----------------------------|--------------------------------------|
-| `POST` | `/api/fill`                 | Extraction results → Excel auto-fill |
-| `GET`  | `/api/templates`            | List uploaded Excel templates        |
-| `POST` | `/api/templates/{doc_type}` | Upload Excel template                |
-| `GET`  | `/api/download/{filename}`  | Download filled file                 |
+| Method | Path                        | Description                                  |
+|--------|-----------------------------|----------------------------------------------|
+| `POST` | `/api/fill`                 | Extraction results → Excel auto-fill         |
+| `GET`  | `/api/templates`            | List uploaded Excel templates                |
+| `POST` | `/api/templates/{doc_type}` | Upload Excel template                        |
+| `GET`  | `/api/download/{filename}`  | Download filled file                         |
+| `POST` | `/api/open-file/{filename}` | Locate file in system file manager (desktop) |
 
 ### History
 
@@ -194,20 +205,23 @@ docker compose up --build
 
 ### Desktop-only
 
-| Method | Path                   | Description                        |
-|--------|------------------------|------------------------------------|
-| `GET`  | `/api/scan/devices`    | List available scanners            |
-| `POST` | `/api/scan/acquire`    | Acquire scan                       |
-| `GET`  | `/api/autostart`       | Get auto-start status              |
-| `PUT`  | `/api/autostart`       | Set auto-start                     |
-| `GET`  | `/api/close-behavior`  | Get close window behavior          |
-| `PUT`  | `/api/close-behavior`  | Set close window behavior          |
-| `POST` | `/api/reset-window`    | Reset window size                  |
-| `GET`  | `/api/version`         | Check for updates                  |
-| `GET`  | `/api/auto-update`     | Get auto-update preference         |
-| `PUT`  | `/api/auto-update`     | Set auto-update preference         |
-| `POST` | `/api/update/download` | Trigger background update download |
-| `GET`  | `/api/update/status`   | Get update download status         |
+| Method | Path                        | Description                         |
+|--------|-----------------------------|-------------------------------------|
+| `GET`  | `/api/scan/devices`         | List available scanners             |
+| `POST` | `/api/scan/acquire`         | Acquire scan                        |
+| `GET`  | `/api/scan/file/{filename}` | Get scanned image file              |
+| `POST` | `/api/browse-folder`        | Open folder picker dialog (desktop) |
+| `GET`  | `/api/autostart`            | Get auto-start status               |
+| `PUT`  | `/api/autostart`            | Set auto-start                      |
+| `GET`  | `/api/close-behavior`       | Get close window behavior           |
+| `PUT`  | `/api/close-behavior`       | Set close window behavior           |
+| `POST` | `/api/reset-window`         | Reset window size                   |
+| `GET`  | `/api/version`              | Check for updates                   |
+| `GET`  | `/api/auto-update`          | Get auto-update preference          |
+| `PUT`  | `/api/auto-update`          | Set auto-update preference          |
+| `POST` | `/api/update/download`      | Trigger background update download  |
+| `GET`  | `/api/update/status`        | Get update download status          |
+| `POST` | `/api/update/restart`       | Restart and apply update (desktop)  |
 
 Full API docs: visit `http://localhost:8000/docs` after starting the backend.
 
@@ -218,13 +232,18 @@ Full API docs: visit `http://localhost:8000/docs` after starting the backend.
 | Technology           | Purpose                                                                                                                                |
 |----------------------|----------------------------------------------------------------------------------------------------------------------------------------|
 | **Python 3.11+**     | Primary backend language                                                                                                               |
-| **FastAPI**          | Async REST API framework serving 35+ endpoints for document processing, settings, history, etc.                                        |
+| **FastAPI**          | Async REST API framework serving 42+ endpoints for document processing, settings, history, etc.                                        |
 | **OpenAI VLM**       | Multimodal large models (gpt-4.1-mini / gpt-4.1, etc.) for document classification, structured extraction, and handwriting recognition |
 | **Ultralytics YOLO** | Multi-document detection and segmentation — locates individual documents within merged scans                                           |
 | **OpenCV**           | Image preprocessing pipeline (denoise, deskew, contrast enhancement, sharpening)                                                       |
 | **PyMuPDF (fitz)**   | PDF parsing — converts PDF pages to high-resolution images                                                                             |
 | **Pydantic**         | Request/response data model validation                                                                                                 |
 | **httpx**            | Async HTTP client for API Key testing, GitHub Release checks, exchange rate queries, etc.                                              |
+| **sse-starlette**    | SSE (Server-Sent Events) real-time push for batch processing progress                                                                  |
+| **Pillow**           | Image format conversion and tray icon generation                                                                                       |
+| **NumPy**            | Image matrix operations, used alongside OpenCV                                                                                         |
+| **pandas**           | Data table processing utilities                                                                                                        |
+| **loguru**           | Structured logging                                                                                                                     |
 
 ### Storage & Data
 
@@ -244,6 +263,7 @@ Full API docs: visit `http://localhost:8000/docs` after starting the backend.
 | **TailwindCSS v4** | Utility-first CSS styling                                                                    |
 | **Lucide Icons**   | UI icon library                                                                              |
 | **React Router**   | SPA routing for Home / Dashboard / History / Settings pages                                  |
+| **Axios**          | HTTP client wrapping backend API calls                                                       |
 | **Custom i18n**    | Lightweight internationalization engine supporting 中文 / English / Srpski with live switching |
 
 ### Desktop & Deployment
