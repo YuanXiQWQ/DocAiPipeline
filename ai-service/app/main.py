@@ -28,7 +28,7 @@ from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.config import AVAILABLE_MODELS, settings
-from app.db import init_db
+from app.db import close_all as close_all_db, init_db
 from app.pipeline import Pipeline
 from app.routers import fill, history_router, process, scanner, summary
 from app.schemas import HealthResponse, PipelineResult
@@ -54,6 +54,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     logger.info(f"Output dir: {settings.output_dir}")
     logger.info(f"VLM model: {settings.openai_model}")
     yield
+    close_all_db()
+    logger.info("DocAI Pipeline service stopped")
 
 
 def _read_version() -> str:

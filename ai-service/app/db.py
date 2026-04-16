@@ -20,6 +20,8 @@ from app.config import settings
 # ------------------------------------------------------------------
 
 _local = threading.local()
+_all_conns: list[sqlite3.Connection] = []
+_all_conns_lock = threading.Lock()
 
 
 def db_path() -> Path:
@@ -38,7 +40,22 @@ def get_conn() -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     _local.conn = conn
+    with _all_conns_lock:
+        _all_conns.append(conn)
     return conn
+
+
+def close_all() -> None:
+    """关闭所有线程创建的 SQLite 连接，释放文件锁。"""
+    with _all_conns_lock:
+        for conn in _all_conns:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        _all_conns.clear()
+    _local.conn = None
+    logger.info("所有 SQLite 连接已关闭")
 
 
 # ------------------------------------------------------------------

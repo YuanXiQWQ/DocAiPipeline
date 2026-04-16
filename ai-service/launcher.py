@@ -593,6 +593,9 @@ def main() -> None:
     server_thread.join(timeout=5)
     logger.info(f"{APP_NAME} 已退出")
 
+    # 强制终止进程，确保 YOLO/torch/SQLite 等残留线程不会阻止退出
+    os._exit(0)
+
 
 if __name__ == "__main__":
     main()
