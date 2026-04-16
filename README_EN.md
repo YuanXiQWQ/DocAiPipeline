@@ -213,13 +213,49 @@ Full API docs: visit `http://localhost:8000/docs` after starting the backend.
 
 ## Tech Stack
 
-- **AI Backend**: Python, FastAPI, OpenCV, PyMuPDF, Ultralytics YOLO, OpenAI VLM (gpt-4.1-mini)
-- **Storage**: SQLite (WAL mode, auto-migration from legacy JSON)
-- **Excel Engine**: openpyxl (preserves formulas, formatting, and pivot tables)
-- **Web Frontend**: React 19, TypeScript, Vite, TailwindCSS v4, Lucide Icons
-- **Desktop**: PyInstaller (onedir) + pywebview + pystray system tray
-- **CI/CD**: GitHub Actions → auto build → Release publish
-- **Deployment**: Docker Compose / PyInstaller desktop .exe / Local dev
+### AI Backend
+
+| Technology           | Purpose                                                                                                                                |
+|----------------------|----------------------------------------------------------------------------------------------------------------------------------------|
+| **Python 3.11+**     | Primary backend language                                                                                                               |
+| **FastAPI**          | Async REST API framework serving 35+ endpoints for document processing, settings, history, etc.                                        |
+| **OpenAI VLM**       | Multimodal large models (gpt-4.1-mini / gpt-4.1, etc.) for document classification, structured extraction, and handwriting recognition |
+| **Ultralytics YOLO** | Multi-document detection and segmentation — locates individual documents within merged scans                                           |
+| **OpenCV**           | Image preprocessing pipeline (denoise, deskew, contrast enhancement, sharpening)                                                       |
+| **PyMuPDF (fitz)**   | PDF parsing — converts PDF pages to high-resolution images                                                                             |
+| **Pydantic**         | Request/response data model validation                                                                                                 |
+| **httpx**            | Async HTTP client for API Key testing, GitHub Release checks, exchange rate queries, etc.                                              |
+
+### Storage & Data
+
+| Technology   | Purpose                                                                                                               |
+|--------------|-----------------------------------------------------------------------------------------------------------------------|
+| **SQLite**   | Local persistence (WAL mode) with three tables: summary entries, revision history, processing records                 |
+| **openpyxl** | Excel read/write — preserves formulas, formatting, merged cells, and pivot tables; supports 6 document type auto-fill |
+| **JSON**     | Lightweight persistence for user settings (`user_settings.json`) and desktop preferences (`desktop_prefs.json`)       |
+
+### Web Frontend
+
+| Technology         | Purpose                                                                                      |
+|--------------------|----------------------------------------------------------------------------------------------|
+| **React 19**       | UI framework — component-based upload → extract → review → export workflow                   |
+| **TypeScript**     | Type safety across all frontend modules                                                      |
+| **Vite**           | Dev hot-reload and production builds                                                         |
+| **TailwindCSS v4** | Utility-first CSS styling                                                                    |
+| **Lucide Icons**   | UI icon library                                                                              |
+| **React Router**   | SPA routing for Home / Dashboard / History / Settings pages                                  |
+| **Custom i18n**    | Lightweight internationalization engine supporting 中文 / English / Srpski with live switching |
+
+### Desktop & Deployment
+
+| Technology         | Purpose                                                 |
+|--------------------|---------------------------------------------------------|
+| **PyInstaller**    | onedir mode packaging for instant-launch desktop app    |
+| **pywebview**      | Native window container (falls back to default browser) |
+| **pystray**        | System tray icon with minimize-to-tray and context menu |
+| **comtypes**       | WIA COM scanner integration (Windows only)              |
+| **GitHub Actions** | CI auto build → zip packaging → Release publish         |
+| **Docker Compose** | One-click containerized frontend + backend deployment   |
 
 ## License
 

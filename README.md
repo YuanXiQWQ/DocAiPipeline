@@ -210,13 +210,49 @@ docker compose up --build
 
 ## 技术栈
 
-- **AI 后端**：Python, FastAPI, OpenCV, PyMuPDF, Ultralytics YOLO, OpenAI VLM (gpt-4.1-mini)
-- **存储**：SQLite（WAL 模式，自动从旧版 JSON 迁移）
-- **Excel 引擎**：openpyxl（保留公式、格式与数据透视表）
-- **Web 前端**：React 19, TypeScript, Vite, TailwindCSS v4, Lucide Icons
-- **桌面端**：PyInstaller (onedir) + pywebview + pystray 系统托盘
-- **CI/CD**：GitHub Actions → 自动构建 → Release 发布
-- **部署**：Docker Compose / PyInstaller 桌面 .exe / 本地开发
+### AI 后端
+
+| 技术                   | 用途                                                    |
+|----------------------|-------------------------------------------------------|
+| **Python 3.11+**     | 后端主语言                                                 |
+| **FastAPI**          | 异步 REST API 框架，提供文档处理、设置管理、历史查询等 35+ 个端点              |
+| **OpenAI VLM**       | 多模态大模型（gpt-4.1-mini / gpt-4.1 等），用于文档分类、结构化信息抽取和手写识别  |
+| **Ultralytics YOLO** | 多文档检测与分割，从合并扫描件中定位单独文档区域                              |
+| **OpenCV**           | 图像预处理管线（去噪、纠偏、对比度增强、锐化）                               |
+| **PyMuPDF (fitz)**   | PDF 解析，将 PDF 页面转换为高分辨率图像                              |
+| **Pydantic**         | 请求/响应数据模型校验                                           |
+| **httpx**            | 异步 HTTP 客户端，用于 API Key 测试、GitHub Release 检查、汇率查询等外部请求 |
+
+### 存储与数据
+
+| 技术           | 用途                                                         |
+|--------------|------------------------------------------------------------|
+| **SQLite**   | 本地持久化存储（WAL 模式），三张表：汇总明细、修订历史、处理记录                         |
+| **openpyxl** | 读写 Excel，保留公式、格式、合并单元格与数据透视表，支持 6 种文档类型的自动填充               |
+| **JSON**     | 用户设置（`user_settings.json`）和桌面偏好（`desktop_prefs.json`）轻量持久化 |
+
+### Web 前端
+
+| 技术                 | 用途                                 |
+|--------------------|------------------------------------|
+| **React 19**       | 前端 UI 框架，组件化构建上传→识别→复核→导出全流程       |
+| **TypeScript**     | 类型安全，贯穿前端所有模块                      |
+| **Vite**           | 开发热重载与生产构建                         |
+| **TailwindCSS v4** | 原子化 CSS 样式                         |
+| **Lucide Icons**   | UI 图标库                             |
+| **React Router**   | SPA 路由，管理主页/数据看板/历史/设置四个页面         |
+| **自研 i18n**        | 轻量国际化引擎，支持中文/English/Srpski 三语实时切换 |
+
+### 桌面端与部署
+
+| 技术                 | 用途                            |
+|--------------------|-------------------------------|
+| **PyInstaller**    | onedir 模式打包为桌面应用，秒启动          |
+| **pywebview**      | 原生窗口容器（回退为默认浏览器）              |
+| **pystray**        | 系统托盘图标，最小化到托盘、右键菜单            |
+| **comtypes**       | WIA COM 扫描仪集成（仅 Windows）      |
+| **GitHub Actions** | CI 自动构建 → zip 打包 → Release 发布 |
+| **Docker Compose** | 前后端容器化一键部署                    |
 
 ## 许可证
 
