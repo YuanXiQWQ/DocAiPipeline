@@ -84,6 +84,10 @@ export interface UserSettings {
     openai_model: string;
     openai_base_url: string;
     language: string;
+    default_currency: string;
+    default_length_unit: string;
+    default_area_unit: string;
+    default_volume_unit: string;
 }
 
 export interface SettingsResponse {

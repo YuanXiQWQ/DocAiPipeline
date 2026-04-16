@@ -71,6 +71,12 @@ class Settings(BaseSettings):
     # 语言（预留多语言支持）
     language: str = "zh-CN"
 
+    # 默认单位（当 AI 无法从文档中提取单位时使用）
+    default_currency: str = "EUR"
+    default_length_unit: str = "mm"
+    default_area_unit: str = "m2"
+    default_volume_unit: str = "m3"
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
@@ -89,7 +95,8 @@ class Settings(BaseSettings):
         try:
             data = json.loads(_USER_SETTINGS_FILE.read_text("utf-8"))
             # 只覆盖用户可配置的字段
-            for key in ("openai_api_key", "openai_model", "openai_base_url", "language"):
+            for key in ("openai_api_key", "openai_model", "openai_base_url", "language",
+                    "default_currency", "default_length_unit", "default_area_unit", "default_volume_unit"):
                 if key in data and data[key]:
                     setattr(self, key, data[key])
         except (json.JSONDecodeError, OSError):
@@ -105,7 +112,8 @@ class Settings(BaseSettings):
             except (json.JSONDecodeError, OSError):
                 pass
         # 合并更新
-        for key in ("openai_api_key", "openai_model", "openai_base_url", "language"):
+        for key in ("openai_api_key", "openai_model", "openai_base_url", "language",
+                    "default_currency", "default_length_unit", "default_area_unit", "default_volume_unit"):
             if key in data:
                 existing[key] = data[key]
                 setattr(self, key, data[key])
@@ -129,6 +137,10 @@ class Settings(BaseSettings):
             "openai_model": self.openai_model,
             "openai_base_url": self.openai_base_url,
             "language": self.language,
+            "default_currency": self.default_currency,
+            "default_length_unit": self.default_length_unit,
+            "default_area_unit": self.default_area_unit,
+            "default_volume_unit": self.default_volume_unit,
         }
 
 

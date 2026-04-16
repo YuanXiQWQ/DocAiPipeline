@@ -52,7 +52,7 @@ function fmtNum(v: number): string {
 type LengthUnit = "mm" | "cm" | "m" | "in" | "ft";
 type AreaUnit = "mm2" | "cm2" | "m2" | "in2" | "ft2";
 type VolumeUnit = "mm3" | "cm3" | "m3" | "in3" | "ft3";
-type CurrencyUnit = "EUR" | "USD" | "CNY" | "RSD";
+type CurrencyUnit = "EUR" | "USD" | "CNY" | "RSD" | "HRK" | "GBP";
 
 interface UnitConfig {
     length: LengthUnit;
@@ -68,7 +68,7 @@ const VOL_TO_M3: Record<VolumeUnit, number> = { mm3: 1e-9, cm3: 1e-6, m3: 1, in3
 const LENGTH_UNITS: LengthUnit[] = ["mm", "cm", "m", "in", "ft"];
 const AREA_UNITS: AreaUnit[] = ["mm2", "cm2", "m2", "in2", "ft2"];
 const VOLUME_UNITS: VolumeUnit[] = ["mm3", "cm3", "m3", "in3", "ft3"];
-const CURRENCY_UNITS: CurrencyUnit[] = ["EUR", "USD", "CNY", "RSD"];
+const CURRENCY_UNITS: CurrencyUnit[] = ["EUR", "USD", "CNY", "RSD", "HRK", "GBP"];
 
 const DEFAULT_UNITS: UnitConfig = { length: "m", area: "m2", volume: "m3", currency: "EUR" };
 
@@ -83,7 +83,7 @@ function unitLabel(u: string): string { return UNIT_LABEL[u] ?? u; }
 function convertUnit(value: number, fromUnit: string, units: UnitConfig, rates: Record<string, number>): { value: number; unit: string } {
     const fu = fromUnit.toLowerCase().trim();
     // 货币
-    if (fu === "eur" || fu === "usd" || fu === "cny" || fu === "rsd") {
+    if (["eur", "usd", "cny", "rsd", "hrk", "gbp"].includes(fu)) {
         if (units.currency === fromUnit.toUpperCase()) return {value, unit: units.currency};
         const fromKey = fu;
         const toKey = units.currency.toLowerCase();
@@ -174,6 +174,18 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
     const [newValue, setNewValue] = useState("");
     const [newDate, setNewDate] = useState("");
     const [newNote, setNewNote] = useState("");
+    const [newUnit, setNewUnit] = useState(unit);
+
+    /* 根据单位类型提供可选单位列表 */
+    const isCurrency = ["eur", "usd", "cny", "rsd", "hrk", "gbp"].includes(unit.toLowerCase());
+    const isVolume = ["m3", "cm3", "mm3", "in3", "ft3"].includes(unit.toLowerCase());
+    const isArea = ["m2", "cm2", "mm2", "in2", "ft2"].includes(unit.toLowerCase());
+    const isLength = ["mm", "cm", "m", "in", "ft"].includes(unit.toLowerCase());
+    const unitOptions: string[] = isCurrency ? [...CURRENCY_UNITS]
+        : isVolume ? ["m3", "cm3", "mm3", "in3", "ft3"]
+        : isArea ? ["m2", "cm2", "mm2", "in2", "ft2"]
+        : isLength ? ["mm", "cm", "m", "in", "ft"]
+        : [unit];
 
     const fetchEntries = useCallback(() => {
         setLoading(true);
@@ -219,7 +231,7 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
         await createSummaryEntry({
             category, metric,
             date: newDate || new Date().toISOString().slice(0, 10),
-            value: v, unit,
+            value: v, unit: newUnit,
             note: newNote || undefined,
         });
         setAddAfter(null);
@@ -280,6 +292,11 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
                             <span className="text-xs text-amber-600">{t("dashboard.manual_entry")}</span>
                             <input type="number" step="any" placeholder={t("dashboard.entry_value")} value={newValue} onChange={e => setNewValue(e.target.value)}
                                    className="border rounded px-2 py-1 text-xs w-28 text-right"/>
+                            {unitOptions.length > 1 && (
+                                <select value={newUnit} onChange={e => setNewUnit(e.target.value)} className="border rounded px-1 py-1 text-xs">
+                                    {unitOptions.map(u => <option key={u} value={u}>{unitLabel(u)}</option>)}
+                                </select>
+                            )}
                             <input type="text" placeholder={t("dashboard.entry_note")} value={newNote} onChange={e => setNewNote(e.target.value)}
                                    className="border rounded px-2 py-1 text-xs w-24"/>
                             <button onClick={handleAddRow} className="p-1 text-emerald-600 hover:text-emerald-800"><Check className="w-4 h-4"/></button>
@@ -334,7 +351,7 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
                                         {editingRow === entry.id ? (
                                             <input type="number" step="any" value={editValue} onChange={e => setEditValue(e.target.value)} className="border rounded px-2 py-1 text-xs w-28 text-right"/>
                                         ) : (
-                                            <span className={entry.deleted ? "line-through" : ""}>{fmtNum(entry.value)} {displayUnit}</span>
+                                            <span className={entry.deleted ? "line-through" : ""}>{fmtNum(entry.value)} {unitLabel(entry.unit || unit)}</span>
                                         )}
                                     </td>
                                     <td className="px-4 py-2.5 text-center">
@@ -406,8 +423,15 @@ function DetailView({title, category, metric, dateFrom, dateTo, unit, onBack}: D
                                         <td className="px-4 py-2.5"></td>
                                         <td className="px-4 py-2.5 text-xs text-amber-600">{t("dashboard.manual_entry")}</td>
                                         <td className="px-4 py-2.5">
-                                            <input type="number" step="any" placeholder={t("dashboard.entry_value")} value={newValue} onChange={e => setNewValue(e.target.value)}
-                                                   className="border rounded px-2 py-1 text-xs w-28 text-right"/>
+                                            <div className="flex items-center gap-1 justify-end">
+                                                <input type="number" step="any" placeholder={t("dashboard.entry_value")} value={newValue} onChange={e => setNewValue(e.target.value)}
+                                                       className="border rounded px-2 py-1 text-xs w-28 text-right"/>
+                                                {unitOptions.length > 1 && (
+                                                    <select value={newUnit} onChange={e => setNewUnit(e.target.value)} className="border rounded px-1 py-1 text-xs">
+                                                        {unitOptions.map(u => <option key={u} value={u}>{unitLabel(u)}</option>)}
+                                                    </select>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-4 py-2.5 text-center">
                                             <div className="flex items-center justify-center gap-1">

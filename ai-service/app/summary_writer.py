@@ -10,6 +10,7 @@ from typing import Any
 
 from loguru import logger
 
+from app.config import settings
 from app.summary_store import SummaryEntry, save_entries_batch
 
 
@@ -101,7 +102,8 @@ def _customs_entries(results: list[dict], filename: str, hid: str, date: str) ->
         out.append(SummaryEntry(
             source="auto", history_id=hid, filename=filename,
             category="import", metric="customs_record",
-            date=doc_date, value=amount, unit="EUR",
+            date=doc_date, value=amount,
+            unit=str(fields.get("currency", "")).strip().upper() or settings.default_currency,
             batch_id=str(fields.get("declaration_number", "")),
             detail={
                 "doc_type_detail": fields.get("document_type", ""),

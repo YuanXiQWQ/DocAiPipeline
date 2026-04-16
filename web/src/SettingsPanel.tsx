@@ -60,6 +60,12 @@ export default function SettingsPanel({onSettingsChange}: Props) {
     const [baseUrl, setBaseUrl] = useState("");
     const [language, setLanguage] = useState<Locale>(getCurrentLocale());
 
+    // 默认单位
+    const [defaultCurrency, setDefaultCurrency] = useState("EUR");
+    const [defaultLengthUnit, setDefaultLengthUnit] = useState("mm");
+    const [defaultAreaUnit, setDefaultAreaUnit] = useState("m2");
+    const [defaultVolumeUnit, setDefaultVolumeUnit] = useState("m3");
+
     // 开机自启状态
     const [autostart, setAutostartState] = useState(false);
     const [autostartLoading, setAutostartLoading] = useState(false);
@@ -106,6 +112,10 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                 setSelectedModel(res.settings.openai_model);
                 setBaseUrl(res.settings.openai_base_url);
                 setApiKey("");
+                if (res.settings.default_currency) setDefaultCurrency(res.settings.default_currency);
+                if (res.settings.default_length_unit) setDefaultLengthUnit(res.settings.default_length_unit);
+                if (res.settings.default_area_unit) setDefaultAreaUnit(res.settings.default_area_unit);
+                if (res.settings.default_volume_unit) setDefaultVolumeUnit(res.settings.default_volume_unit);
                 setIsDesktop(platformRes.desktop);
                 setAppVersion(platformRes.version);
                 setAutostartState(autostartRes.enabled);
@@ -133,6 +143,10 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                 openai_model: selectedModel,
                 openai_base_url: baseUrl,
                 language: language,
+                default_currency: defaultCurrency,
+                default_length_unit: defaultLengthUnit,
+                default_area_unit: defaultAreaUnit,
+                default_volume_unit: defaultVolumeUnit,
                 ...overrides,
             };
             const res = await updateSettings(body);
@@ -146,13 +160,13 @@ export default function SettingsPanel({onSettingsChange}: Props) {
         } finally {
             setSaving(false);
         }
-    }, [selectedModel, baseUrl, language]);
+    }, [selectedModel, baseUrl, language, defaultCurrency, defaultLengthUnit, defaultAreaUnit, defaultVolumeUnit]);
 
     /** model / language 变化时立即保存 */
     useEffect(() => {
         if (!initialized.current) return;
         void doSave();
-    }, [selectedModel, language]);
+    }, [selectedModel, language, defaultCurrency, defaultLengthUnit, defaultAreaUnit, defaultVolumeUnit]);
 
     /** API Key / Base URL 失焦时保存 */
     const handleBlurSave = useCallback(() => {
@@ -496,6 +510,44 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                         {opt.label}
                                     </button>
                                 ))}
+                            </div>
+                        </div>
+
+                        {/* 默认单位 */}
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                                {t("settings.default_units")}
+                            </label>
+                            <p className="text-xs text-slate-400 mb-3">{t("settings.default_units_desc")}</p>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs text-slate-500 mb-1">{t("settings.default_currency")}</label>
+                                    <select value={defaultCurrency} onChange={e => setDefaultCurrency(e.target.value)}
+                                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+                                        {["EUR", "USD", "CNY", "RSD", "HRK", "GBP"].map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-slate-500 mb-1">{t("settings.default_length")}</label>
+                                    <select value={defaultLengthUnit} onChange={e => setDefaultLengthUnit(e.target.value)}
+                                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+                                        {["mm", "cm", "m", "in", "ft"].map(u => <option key={u} value={u}>{u}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-slate-500 mb-1">{t("settings.default_area")}</label>
+                                    <select value={defaultAreaUnit} onChange={e => setDefaultAreaUnit(e.target.value)}
+                                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+                                        {["m2", "cm2", "mm2", "in2", "ft2"].map(u => <option key={u} value={u}>{u === "m2" ? "m²" : u === "cm2" ? "cm²" : u === "mm2" ? "mm²" : u === "in2" ? "in²" : "ft²"}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-slate-500 mb-1">{t("settings.default_volume")}</label>
+                                    <select value={defaultVolumeUnit} onChange={e => setDefaultVolumeUnit(e.target.value)}
+                                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+                                        {["m3", "cm3", "mm3", "in3", "ft3"].map(u => <option key={u} value={u}>{u === "m3" ? "m³" : u === "cm3" ? "cm³" : u === "mm3" ? "mm³" : u === "in3" ? "in³" : "ft³"}</option>)}
+                                    </select>
+                                </div>
                             </div>
                         </div>
 

@@ -212,6 +212,12 @@
   "settings.about": "关于",
   "settings.repo": "项目仓库",
   "settings.license": "许可证: AGPL v3.0",
+  "settings.default_units": "默认单位",
+  "settings.default_units_desc": "当文档中未标明单位时，使用以下默认值",
+  "settings.default_currency": "货币",
+  "settings.default_length": "长度",
+  "settings.default_area": "面积",
+  "settings.default_volume": "体积",
 
   "field.document_type": "文档类型",
   "field.declaration_number": "报关单号",

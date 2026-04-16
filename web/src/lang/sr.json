@@ -212,6 +212,12 @@
   "settings.about": "O programu",
   "settings.repo": "Repozitorijum projekta",
   "settings.license": "Licenca: AGPL v3.0",
+  "settings.default_units": "Podrazumevane jedinice",
+  "settings.default_units_desc": "Koristi se kada dokument ne navodi jedinicu mere",
+  "settings.default_currency": "Valuta",
+  "settings.default_length": "Dužina",
+  "settings.default_area": "Površina",
+  "settings.default_volume": "Zapremina",
 
   "field.document_type": "Tip dokumenta",
   "field.declaration_number": "Broj deklaracije",

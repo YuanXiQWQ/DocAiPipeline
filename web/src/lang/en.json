@@ -212,6 +212,12 @@
   "settings.about": "About",
   "settings.repo": "Project Repository",
   "settings.license": "License: AGPL v3.0",
+  "settings.default_units": "Default Units",
+  "settings.default_units_desc": "Used as fallback when a document does not specify units",
+  "settings.default_currency": "Currency",
+  "settings.default_length": "Length",
+  "settings.default_area": "Area",
+  "settings.default_volume": "Volume",
 
   "field.document_type": "Document Type",
   "field.declaration_number": "Declaration No.",
