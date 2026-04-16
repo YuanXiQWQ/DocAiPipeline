@@ -200,7 +200,7 @@
   "settings.update_error": "Failed to check for updates",
   "settings.update_current": "Current Version",
   "settings.about": "About",
-  "footer.powered": "Terra Drvo d.o.o. · Powered by",
+  "settings.repo": "Project Repository",
 
   "field.document_type": "Document Type",
   "field.declaration_number": "Declaration No.",

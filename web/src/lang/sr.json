@@ -200,7 +200,7 @@
   "settings.update_error": "Greška pri proveri ažuriranja",
   "settings.update_current": "Trenutna verzija",
   "settings.about": "O programu",
-  "footer.powered": "Terra Drvo d.o.o. · Pokreće",
+  "settings.repo": "Repozitorijum projekta",
 
   "field.document_type": "Tip dokumenta",
   "field.declaration_number": "Broj deklaracije",

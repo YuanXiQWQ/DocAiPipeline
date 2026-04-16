@@ -7,14 +7,14 @@
 
 ## Features
 
-| Document Type                          | Input       | Output                       | Status |
-|----------------------------------------|-------------|------------------------------|--------|
-| Import Documents (customs/tax/invoice) | Scanned PDF | Invoice Ledger               | ✅      |
-| Log Measurement Sheet                  | PDF / Image | Log Inventory Sheet          | ✅      |
-| Log Output (Dispatch) Sheet            | PDF / Image | Log Inventory Sheet (output) | ✅      |
-| Soak Pool Entry Sheet                  | PDF / Image | Slicing Pool & Machine Sheet | ✅      |
-| Slicing Machine Sheet                  | PDF / Image | Slicing Pool & Machine Sheet | ✅      |
-| Packing Report                         | PDF / Image | Veneer Statistics Sheet      | ✅      |
+| Document Type                          | Input       | Output                       |
+|----------------------------------------|-------------|------------------------------|
+| Import Documents (customs/tax/invoice) | Scanned PDF | Invoice Ledger               |
+| Log Measurement Sheet                  | PDF / Image | Log Inventory Sheet          |
+| Log Output (Dispatch) Sheet            | PDF / Image | Log Inventory Sheet (output) |
+| Soak Pool Entry Sheet                  | PDF / Image | Slicing Pool & Machine Sheet |
+| Slicing Machine Sheet                  | PDF / Image | Slicing Pool & Machine Sheet |
+| Packing Report                         | PDF / Image | Veneer Statistics Sheet      |
 
 **Core Flow**: Upload → VLM Auto-classify → Structured Extraction → Human Review → Excel Auto-fill → Download
 
@@ -130,4 +130,4 @@ Full API docs: visit `http://localhost:8000/docs` after starting the backend.
 
 ## License
 
-This project is for internal use only.
+This project is for internal use only. Open-source licensed under [GNU AGPL v3.0](https://www.gnu.org/licenses/agpl-3.0.en.html)

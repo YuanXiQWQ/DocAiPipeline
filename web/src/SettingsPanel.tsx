@@ -146,7 +146,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
     /** model / language 变化时立即保存 */
     useEffect(() => {
         if (!initialized.current) return;
-        doSave();
+        void doSave();
     }, [selectedModel, language]);
 
     /** API Key / Base URL 失焦时保存 */
@@ -511,6 +511,17 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                 {updateLoading ? t("settings.update_checking") : t("settings.update")}
                             </button>
                             )}
+                        </div>
+                        <div className="text-sm">
+                            <a
+                                href="https://github.com/YuanXiQWQ/DocAiPipeline"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 text-primary-600 hover:text-primary-800 hover:underline"
+                            >
+                                <ExternalLink className="w-3.5 h-3.5"/>
+                                {t("settings.repo")}
+                            </a>
                         </div>
                         {versionInfo && !versionInfo.has_update && (
                             <p className="text-xs text-emerald-600 flex items-center gap-1">

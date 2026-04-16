@@ -200,7 +200,7 @@
   "settings.update_error": "检查更新失败",
   "settings.update_current": "当前版本",
   "settings.about": "关于",
-  "footer.powered": "Terra Drvo d.o.o. · 驱动自",
+  "settings.repo": "项目仓库",
 
   "field.document_type": "文档类型",
   "field.declaration_number": "报关单号",
