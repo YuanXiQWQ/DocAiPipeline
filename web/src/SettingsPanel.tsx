@@ -30,6 +30,7 @@ import {
     setAutoUpdate as apiSetAutoUpdate,
     getUpdateStatus,
     triggerUpdateDownload,
+    restartAndApplyUpdate,
     testApiKey,
     extractErrorMessage,
     type UserSettings,
@@ -774,10 +775,19 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                     </button>
                                 </div>
                                 {updateStatus?.status === "ready" && (
-                                    <p className="text-xs text-emerald-600 flex items-center gap-1">
-                                        <CheckCircle className="w-3.5 h-3.5"/>
-                                        {updateStatus.message}
-                                    </p>
+                                    <div className="flex items-center gap-3">
+                                        <p className="text-xs text-emerald-600 flex items-center gap-1">
+                                            <CheckCircle className="w-3.5 h-3.5"/>
+                                            {updateStatus.message}
+                                        </p>
+                                        <button
+                                            onClick={() => restartAndApplyUpdate().catch(() => {})}
+                                            className="text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md px-3 py-1 transition-colors flex items-center gap-1"
+                                        >
+                                            <Power className="w-3 h-3"/>
+                                            {t("settings.update_restart")}
+                                        </button>
+                                    </div>
                                 )}
                                 {updateStatus?.status === "error" && (
                                     <p className="text-xs text-red-500 flex items-center gap-1">

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -510,6 +511,59 @@ async def _download_update() -> None:
     except (OSError, httpx.HTTPError, zipfile.BadZipFile, KeyError) as e:
         logger.warning(f"下载更新失败: {e}")
         _update_state.update(status="error", message=f"下载失败: {e}")
+
+
+@app.post("/api/update/restart")
+async def restart_and_apply():
+    """启动独立更新器并退出主程序，由更新器完成文件覆盖后重新启动 exe。
+
+    仅桌面模式可用。
+    """
+    if not _is_desktop():
+        raise HTTPException(status_code=400, detail="仅桌面模式支持自动更新重启")
+
+    staging = Path(_UPDATE_DIR) / "extracted"
+    if not staging.exists():
+        raise HTTPException(status_code=400, detail="没有待应用的更新")
+
+    import subprocess as _sp
+
+    # 定位应用根目录和更新器
+    if getattr(sys, "frozen", False):
+        base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    else:
+        base = Path(__file__).resolve().parent.parent
+    updater = base / "updater.py"
+    if not updater.exists():
+        raise HTTPException(status_code=500, detail="更新器脚本不存在")
+
+    exe_path = sys.executable
+    pid = os.getpid()
+
+    if getattr(sys, "frozen", False):
+        updater_exe = base / "updater.exe"
+        if updater_exe.exists():
+            cmd = [str(updater_exe), str(base), exe_path, str(pid)]
+        else:
+            cmd = ["python", str(updater), str(base), exe_path, str(pid)]
+    else:
+        cmd = [sys.executable, str(updater), str(base), exe_path, str(pid)]
+
+    logger.info(f"用户请求重启以应用更新，启动更新器: {' '.join(cmd)}")
+    try:
+        _sp.Popen(
+            cmd,
+            cwd=str(base),
+            creationflags=_sp.DETACHED_PROCESS | _sp.CREATE_NEW_PROCESS_GROUP,
+        )
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"启动更新器失败: {e}")
+
+    # 延迟退出，让响应先返回给前端
+    import asyncio
+    loop = asyncio.get_event_loop()
+    loop.call_later(1.0, os._exit, 0)
+    return {"message": "正在重启…"}
 
 
 # ------------------------------------------------------------------

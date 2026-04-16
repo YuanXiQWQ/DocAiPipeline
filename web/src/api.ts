@@ -445,6 +445,11 @@ export async function triggerUpdateDownload(): Promise<{ message: string }> {
     return data;
 }
 
+export async function restartAndApplyUpdate(): Promise<{ message: string }> {
+    const {data} = await api.post<{ message: string }>("/api/update/restart");
+    return data;
+}
+
 /* 扫描仪 */
 export interface ScannerDevice {
     device_id: string;

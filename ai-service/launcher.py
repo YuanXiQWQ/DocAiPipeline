@@ -313,46 +313,59 @@ def _update_splash_text(root: Any, _text: str) -> None:
 _UPDATE_STAGING = "update_staging"
 
 
-def _apply_pending_update(base: Path) -> None:
-    """如果 update_staging/extracted/ 存在，将其内容覆盖到应用目录。
+def _apply_pending_update(base: Path) -> bool:
+    """如果 update_staging/extracted/ 存在，启动独立更新器进程来覆盖文件。
 
-    覆盖时跳过用户数据文件（*.db, *.json 配置等）。
+    主程序无法覆盖自身的 exe/dll，因此委托给外部更新器：
+    updater.py 等待主程序退出 → 覆盖文件 → 重新启动 exe。
+
+    Returns:
+        True — 已启动更新器，调用方应立即退出
+        False — 无待应用更新，正常继续
     """
-    import shutil as _shutil
+    import subprocess as _sp
 
     staging = base / _UPDATE_STAGING / "extracted"
     if not staging.exists():
-        return
+        return False
 
     logger.info(f"检测到待应用的更新: {staging}")
 
-    # extracted/ 下可能有一层子目录（如 DocAI-Pipeline/）
-    children = list(staging.iterdir())
-    src = children[0] if len(children) == 1 and children[0].is_dir() else staging
+    # 定位更新器脚本（打包后与 exe 同目录，开发模式在脚本旁）
+    updater = base / "updater.py"
+    if not updater.exists():
+        logger.error(f"更新器脚本不存在: {updater}")
+        return False
 
-    # 保护列表：不覆盖用户数据
-    _protected = {"user_settings.json", "desktop_prefs.json", "output", "update_staging"}
+    # 定位 exe 或 python 解释器
+    exe_path = sys.executable  # 打包后就是 DocAI-Pipeline.exe
+    pid = os.getpid()
 
+    # 确定 Python 解释器路径（打包模式下 updater.py 是纯脚本，需要用 Python 运行）
+    if getattr(sys, "frozen", False):
+        # onedir 模式：使用打包自带的 python（在 _internal/ 下）或系统 Python
+        # 由于打包后没有独立 python.exe，将 updater 打包为独立 exe 更可靠
+        # 这里改用 updater.exe（由 spec 打包）
+        updater_exe = base / "updater.exe"
+        if updater_exe.exists():
+            cmd = [str(updater_exe), str(base), exe_path, str(pid)]
+        else:
+            # 回退：尝试用系统 Python 运行脚本
+            cmd = ["python", str(updater), str(base), exe_path, str(pid)]
+    else:
+        cmd = [sys.executable, str(updater), str(base), exe_path, str(pid)]
+
+    logger.info(f"启动更新器: {' '.join(cmd)}")
     try:
-        for item in src.iterdir():
-            if item.name in _protected:
-                continue
-            dest = base / item.name
-            if item.is_dir():
-                if dest.exists():
-                    _shutil.rmtree(dest)
-                _shutil.copytree(str(item), str(dest))
-            else:
-                _shutil.copy2(str(item), str(dest))
-        logger.info("更新文件已覆盖到应用目录")
-    except (OSError, PermissionError) as e:
-        logger.error(f"应用更新失败: {e}")
-
-    # 清理 staging
-    try:
-        _shutil.rmtree(str(base / _UPDATE_STAGING))
-    except OSError:
-        pass
+        _sp.Popen(
+            cmd,
+            cwd=str(base),
+            creationflags=_sp.DETACHED_PROCESS | _sp.CREATE_NEW_PROCESS_GROUP,
+        )
+        return True
+    except OSError as e:
+        logger.error(f"启动更新器失败: {e}")
+        return False
 
 
 # ------------------------------------------------------------------
@@ -399,8 +412,10 @@ def main() -> None:
     base = _base_dir()
     os.chdir(base)
 
-    # 应用上次下载好的更新（覆盖文件）
-    _apply_pending_update(base)
+    # 应用上次下载好的更新（委托给独立更新器进程）
+    if _apply_pending_update(base):
+        logger.info("已启动更新器，主程序即将退出")
+        return
 
     # 显示 Splash 闪屏
     splash_root, splash_destroy = _show_splash(base)

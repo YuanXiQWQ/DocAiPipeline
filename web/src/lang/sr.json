@@ -216,6 +216,7 @@
   "settings.update_latest": "Imate najnoviju verziju",
   "settings.update_available": "Nova verzija {version} je dostupna",
   "settings.update_go": "Idi na preuzimanje",
+  "settings.update_restart": "Restartuj i ažuriraj",
   "settings.update_error": "Greška pri proveri ažuriranja",
   "settings.update_current": "Trenutna verzija",
   "settings.about": "O programu",

@@ -43,6 +43,7 @@ import {
     healthCheck,
     processBatch,
     type ProcessResult,
+    restartAndApplyUpdate,
     scanAcquire,
     type ScannerDevice,
     type UpdateStatus,
@@ -531,6 +532,14 @@ export default function App() {
                                     style={{width: `${updateToast.progress}%`}}
                                 />
                             </div>
+                        )}
+                        {updateToast.status === "ready" && (
+                            <button
+                                onClick={() => restartAndApplyUpdate().catch(() => {})}
+                                className="mt-2 text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md px-3 py-1.5 transition-colors"
+                            >
+                                {t("settings.update_restart")}
+                            </button>
                         )}
                     </div>
                     <button onClick={() => setUpdateToast(null)} className="text-slate-400 hover:text-slate-600">

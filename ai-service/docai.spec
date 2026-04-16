@@ -25,6 +25,8 @@ datas = [
     # 应用图标（系统托盘 + 窗口图标 + 闪屏）
     (str(BASE / "icon.ico"), "."),
     (str(BASE / "icon.png"), "."),
+    # 独立更新器脚本（主程序退出后由其完成文件覆盖）
+    (str(BASE / "updater.py"), "."),
 ]
 
 # 版本号文件（CI 构建时生成）
