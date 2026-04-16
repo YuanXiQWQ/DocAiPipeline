@@ -107,16 +107,18 @@ export default function HistoryPanel({onLoadResult}: HistoryPanelProps) {
 
     const handleBack = () => {
         setDetail(null);
-        // 返回列表后恢复滚动位置
+        // 双帧延迟确保 display:none 切换完成后再恢复位置
         requestAnimationFrame(() => {
-            window.scrollTo(0, scrollRef.current);
+            requestAnimationFrame(() => {
+                window.scrollTo(0, scrollRef.current);
+            });
         });
     };
 
     const handleOpenDetail = async (id: string) => {
-        // 进入详情前保存滚动位置
         scrollRef.current = window.scrollY;
         await handleDetail(id);
+        window.scrollTo(0, 0);
     };
 
     return (

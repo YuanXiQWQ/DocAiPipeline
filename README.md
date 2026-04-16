@@ -135,4 +135,4 @@ docker compose up --build
 
 ## 许可证
 
-本项目仅供内部使用。
+本项目仅供内部使用。开源许可采用 [GNU AGPL v3.0](https://gnu.ac.cn/licenses/agpl-3.0.html#license-text)
