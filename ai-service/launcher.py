@@ -209,12 +209,15 @@ def _show_splash(base: Path) -> tuple[Any, Any]:
     )
     # ── 图标 + 标题 + 作者（居中） ──
     icon_size = 88
-    # 整组内容水平居中：图标宽 + 间距 + 文字区
     group_gap = 28
-    # 估算文字区宽度 ≈ 300
-    group_w = icon_size + group_gap + 300
+    center_y = sh * 0.42
+
+    # 精确测量标题文字宽度
+    import tkinter.font as tkfont
+    title_font = tkfont.Font(family="Segoe UI", size=28, weight="bold")
+    text_w = title_font.measure(APP_NAME)
+    group_w = icon_size + group_gap + text_w
     group_left = (sw - group_w) // 2
-    center_y = sh * 0.42  # 略偏上，给底部留空间
 
     icon_cx = group_left + icon_size // 2
     icon_cy = int(center_y)
@@ -474,22 +477,18 @@ def main() -> None:
             """窗口真正关闭后触发。"""
             shutdown_event.set()
 
-        def _on_loaded() -> None:
-            """窗口加载完成后置前获取焦点。"""
-            def _bring_to_front() -> None:
-                assert _wv_window is not None
-                try:
-                    _wv_window.on_top = True
-                    time.sleep(0.15)
-                    _wv_window.on_top = False
-                except (AttributeError, RuntimeError, OSError):
-                    pass
-            threading.Thread(target=_bring_to_front, daemon=True).start()
+        def _bring_to_front_win32() -> None:
+            """等待窗口就绪后前置。"""
+            try:
+                time.sleep(0.8)
+                if _wv_window is not None:
+                    _wv_window.restore()
+            except (AttributeError, RuntimeError, OSError):
+                pass
 
         assert _wv_window is not None
         _wv_window.events.closing += _on_closing
         _wv_window.events.closed += _on_closed
-        _wv_window.events.loaded += _on_loaded
 
         # 启动托盘（后台线程）
         tray_thread = threading.Thread(
@@ -505,10 +504,10 @@ def main() -> None:
         _icon_str = str(_icon_path) if _icon_path.exists() else None
         # noinspection PyBroadException
         try:
-            _webview.start(gui="edgechromium", icon=_icon_str)
+            _webview.start(func=_bring_to_front_win32, gui="edgechromium", icon=_icon_str)
         except Exception:
             # 若 edgechromium 不可用，尝试默认后端
-            _webview.start(icon=_icon_str)
+            _webview.start(func=_bring_to_front_win32, icon=_icon_str)
 
     else:
         # 回退到浏览器模式
