@@ -5,7 +5,7 @@
     cd ai-service
     pyinstaller docai.spec
 
-产出：dist/DocAI-Pipeline.exe（单文件）
+产出：dist/DocAI-Pipeline/
 """
 
 import sys
@@ -137,17 +137,14 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    [],
+    [],                          # onedir 模式：binaries/datas 由 COLLECT 处理
+    exclude_binaries=True,       # ← 关键：不嵌入二进制文件
     name="DocAI-Pipeline",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     upx_exclude=[],
-    runtime_tmpdir=None,
     console=False,  # 无控制台窗口（桌面应用）
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -155,4 +152,16 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=str(BASE / "icon.ico"),
+)
+
+# onedir 模式：所有文件收集到 dist/DocAI-Pipeline/ 目录
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name="DocAI-Pipeline",
 )

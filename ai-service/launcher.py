@@ -68,10 +68,14 @@ def _wait_for_server(host: str, port: int, timeout: float = 30.0) -> bool:
 
 
 def _base_dir() -> Path:
-    """获取应用根目录（兼容 PyInstaller 打包后的临时目录）。"""
+    """获取应用根目录（兼容 PyInstaller onedir/onefile 模式）。
+
+    - onedir 模式：_MEIPASS == exe 所在目录
+    - onefile 模式：_MEIPASS == 临时解压目录
+    - 开发模式：脚本所在目录
+    """
     if getattr(sys, "frozen", False):
-        # PyInstaller 打包后，_MEIPASS 是解压临时目录
-        return Path(getattr(sys, "_MEIPASS"))  # PyInstaller 打包后的临时目录
+        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
     return Path(__file__).resolve().parent
 
 

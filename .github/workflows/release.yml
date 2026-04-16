@@ -27,7 +27,7 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "exe_name=DocAI-Pipeline-${VERSION}.exe" >> "$GITHUB_OUTPUT"
+          echo "zip_name=DocAI-Pipeline-${VERSION}-win-x64.zip" >> "$GITHUB_OUTPUT"
 
       # ---- 安装 Node.js ----
       - name: 安装 Node.js
@@ -51,7 +51,7 @@ jobs:
         shell: bash
         run: cp -r web/dist ai-service/web_dist
 
-      # ---- 安装 Python ----
+      # ---- 安装 Python（带 pip 缓存） ----
       - name: 安装 Python
         uses: actions/setup-python@v5
         with:
@@ -66,16 +66,16 @@ jobs:
           pip install pyinstaller
         working-directory: ai-service
 
-      # ---- PyInstaller 打包 ----
+      # ---- PyInstaller 打包（onedir 模式） ----
       - name: PyInstaller 打包
         run: pyinstaller --clean --noconfirm docai.spec
         working-directory: ai-service
 
-      # ---- 重命名产物（附带版本号） ----
-      - name: 重命名产物
-        shell: bash
+      # ---- 打包为 zip（onedir → zip） ----
+      - name: 打包为 zip
+        shell: pwsh
         run: |
-          mv ai-service/dist/DocAI-Pipeline.exe "ai-service/dist/${{ steps.version.outputs.exe_name }}"
+          Compress-Archive -Path "ai-service/dist/DocAI-Pipeline/*" -DestinationPath "ai-service/dist/${{ steps.version.outputs.zip_name }}"
 
       # ---- 创建 GitHub Release ----
       - name: 创建 Release
@@ -84,5 +84,10 @@ jobs:
           name: "DocAI Pipeline v${{ steps.version.outputs.version }}"
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
+          body: |
+            ## 使用方式
+            1. 下载 `${{ steps.version.outputs.zip_name }}`
+            2. 解压到任意目录
+            3. 双击 `DocAI-Pipeline.exe` 启动
           files: |
-            ai-service/dist/${{ steps.version.outputs.exe_name }}
+            ai-service/dist/${{ steps.version.outputs.zip_name }}
