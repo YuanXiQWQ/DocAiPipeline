@@ -219,6 +219,12 @@ class LogFiller:
             保存的文件路径。
         """
         wb = openpyxl.load_workbook(self.template_path)
+        if self.SHEET_NAME not in wb.sheetnames:
+            available = ", ".join(wb.sheetnames)
+            raise ValueError(
+                f"模板文件 '{self.template_path.name}' 中不存在工作表 '{self.SHEET_NAME}'。"
+                f"可用工作表: [{available}]"
+            )
         ws = wb[self.SHEET_NAME]
 
         # 找到第一个空行
@@ -276,18 +282,11 @@ class LogFiller:
 
     @staticmethod
     def _find_first_empty_row(ws: Any) -> int:
-        """找到数据源表中第一个空行。"""
+        """找到数据源表中第一个空行（按日期列 C3 判空）。"""
         for row in range(DATA_START_ROW, ws.max_row + 2):
-            # 检查 A 列（年）是否有数据
-            cell_val = ws.cell(row=row, column=COL_YEAR).value
+            cell_val = ws.cell(row=row, column=COL_DATE).value
             if cell_val is None or cell_val == "":
                 return row
-            # 也检查年份是否为占位值（如 1900）
-            try:
-                if int(cell_val) < 2000:
-                    return row
-            except (ValueError, TypeError):
-                pass
         return ws.max_row + 1
 
     @staticmethod
@@ -344,10 +343,8 @@ class LogFiller:
             grade: str,
             customer: str,
     ) -> None:
-        """向数据源表写入一行数据。"""
+        """向数据源表写入一行数据。公式列（C1/C2/C21-C23/C25-C26）由模板预填，不可覆写。"""
         if date_obj:
-            ws.cell(row=row, column=COL_YEAR, value=date_obj.year)
-            ws.cell(row=row, column=COL_MONTH, value=date_obj.month)
             ws.cell(row=row, column=COL_DATE, value=date_obj)
 
         ws.cell(row=row, column=COL_WORKSHOP, value=self.workshop)
@@ -366,14 +363,8 @@ class LogFiller:
         ws.cell(row=row, column=COL_LENGTH, value=entry.length_m)
         ws.cell(row=row, column=COL_DIAMETER, value=entry.diameter_cm)
 
-        # 计尺尺寸 = 原始尺寸（原木无厚度）
-        ws.cell(row=row, column=COL_CALC_LENGTH, value=entry.length_m)
-        ws.cell(row=row, column=COL_CALC_WIDTH, value=entry.diameter_cm)
-        ws.cell(row=row, column=COL_CALC_THICK, value=0)
+        # 根数
+        ws.cell(row=row, column=COL_COUNT, value=1)
 
-        # 数量
-        ws.cell(row=row, column=COL_QTY_M2, value=0)
-        ws.cell(row=row, column=COL_QTY_M3, value=volume)
-
-        # 重量 = 体积（用于透视表汇总）
+        # 重量（体积，用于透视表汇总）
         ws.cell(row=row, column=COL_WEIGHT, value=volume)

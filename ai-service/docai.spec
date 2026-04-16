@@ -37,6 +37,11 @@ yolo_model = BASE / "models" / "yolo_customs_doc.pt"
 if yolo_model.exists():
     datas.append((str(yolo_model), "models"))
 
+# 内置数据统计 Excel 模板
+excel_template = BASE / "models" / "数据统计_模板.xlsx"
+if excel_template.exists():
+    datas.append((str(excel_template), "models"))
+
 # 需要收集的隐式导入（PyInstaller 无法自动检测的模块）
 hiddenimports = [
     # FastAPI 及其依赖

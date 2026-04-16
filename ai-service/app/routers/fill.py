@@ -1,16 +1,12 @@
 """Excel 填充路由：将识别结果写入目标 Excel 模板并返回下载链接。
 
-支持的填充类型对应各个 Phase 的文档：
-- customs → 纸质发票记录表
-- log_measurement → 原木出入库
-- log_output → 原木出入库（出库）
-- soak_pool → 刨切入池与上机表
-- slicing → 刨切入池与上机表（上机）
-- packing → 表板统计
+所有文档类型均写入同一个数据统计模板的“数据源表”工作表。
+模板解析优先级：用户上传 > 按 doc_type 存放的专用模板 > 内置默认模板。
 """
 
 from __future__ import annotations
 
+import sys
 import uuid
 from pathlib import Path
 
@@ -35,6 +31,15 @@ router = APIRouter(prefix="/api", tags=["填充"])
 # ------------------------------------------------------------------
 
 TEMPLATES_DIR = Path(settings.output_dir) / "templates"
+
+
+def _builtin_template_path() -> Path:
+    """内置数据统计模板路径（兼容 PyInstaller 打包与开发模式）。"""
+    if getattr(sys, "frozen", False):
+        base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    else:
+        base = Path(__file__).resolve().parent.parent.parent  # ai-service/
+    return base / "models" / "数据统计_模板.xlsx"
 
 
 class FillRequest(BaseModel):
@@ -110,14 +115,29 @@ async def upload_template(
 # ------------------------------------------------------------------
 
 
+# customs 使用独立的纸质发票记录表模板，不写入数据源表
+_NEED_OWN_TEMPLATE = frozenset({"customs"})
+
+
 def _find_template(doc_type: str) -> Path:
-    """查找指定类型的模板文件。"""
+    """查找模板文件。优先级：按 doc_type 存放的专用模板 > 内置默认模板。"""
+    # 1. 按 doc_type 查找专用模板
     target_dir = TEMPLATES_DIR / doc_type
     if target_dir.exists():
         templates = list(target_dir.glob("*.xlsx"))
         if templates:
-            return templates[0]  # 取第一个
-    raise HTTPException(404, f"未找到 {doc_type} 类型的模板文件，请先上传模板")
+            return templates[0]
+    # 2. 需要独立模板的类型不回退到数据统计模板
+    if doc_type in _NEED_OWN_TEMPLATE:
+        raise HTTPException(
+            404,
+            f"未找到 {doc_type} 类型的专用模板，请在填充时上传模板或存放到 templates/{doc_type}/",
+        )
+    # 3. 回退到内置数据统计模板
+    builtin = _builtin_template_path()
+    if builtin.exists():
+        return builtin
+    raise HTTPException(404, f"未找到模板文件，请在填充时上传 Excel 模板")
 
 
 @router.post("/fill", response_model=FillResponse)

@@ -303,6 +303,25 @@ export default function App() {
         }
     }, [selectedResult, templateFile]);
 
+    const handleDownload = useCallback(async () => {
+        if (!fillResult) return;
+        try {
+            const resp = await fetch(fillResult.download_url);
+            if (!resp.ok) throw new Error(`${resp.status}`);
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = fillResult.filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        }
+    }, [fillResult]);
+
     /* 回到主页（不中断处理，不清状态） */
     const handleGoHome = useCallback(() => {
         setView("upload");
@@ -462,6 +481,7 @@ export default function App() {
                             handleProcess={handleProcess}
                             handleAbortAll={handleAbortAll}
                             handleFill={handleFill}
+                            handleDownload={handleDownload}
                             handleReset={handleReset}
                             handleGoHome={handleGoHome}
                             scanAvailable={scanAvailable}
@@ -515,7 +535,7 @@ function ProcessingFlow({
                             fillResult, error, setTemplateFile,
                             inputRef, dragging, setDragging, preview,
                             needsSetup, handleFileSelect, handleDrop,
-                            handleProcess, handleAbortAll, handleFill, handleReset, handleGoHome,
+                            handleProcess, handleAbortAll, handleFill, handleDownload, handleReset, handleGoHome,
                             scanAvailable, scanDevices, scanSelectedDevice, setScanSelectedDevice,
                             scanning, scanMsg, handleScan,
                         }: {
@@ -542,6 +562,7 @@ function ProcessingFlow({
     handleProcess: () => void;
     handleAbortAll: () => void;
     handleFill: () => void;
+    handleDownload: () => void;
     handleReset: () => void;
     handleGoHome: () => void;
     scanAvailable: boolean;
@@ -1181,14 +1202,13 @@ function ProcessingFlow({
                         {t("done.rows_written").replace("{n}", String(fillResult.rows_written))}
                     </p>
                     <div className="flex gap-4 justify-center">
-                        <a
-                            href={fillResult.download_url}
-                            download
+                        <button
+                            onClick={handleDownload}
                             className="px-6 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors font-medium inline-flex items-center gap-2"
                         >
                             <Download className="w-4 h-4"/>
                             {t("done.download")}
-                        </a>
+                        </button>
                         <button
                             onClick={handleGoHome}
                             className="px-6 py-2.5 border border-slate-300 text-slate-600 rounded-xl hover:bg-slate-50 transition-colors"

@@ -1,4 +1,16 @@
-"""工厂内部单据 Excel 填充器：出库→原木出入库 / 入池+上机→刨切表 / 打包→表板统计。
+"""工厂内部单据 Excel 填充器。
+
+所有文档类型均写入统一的「数据统计」模板的「数据源表」工作表。
+
+数据源表列布局（R2 表头）：
+  C1=年(公式)  C2=月(公式)  C3=日期  C4=车间  C5=物料性质
+  C6=工序  C7=木种  C8=货物名称  C9=序号/批次号  C10=送货客户
+  C11=车牌号  C12=货物所有人  C13=包号/根号  C14=等级  C15=工艺
+  C16=锯号/池号  C17=投入数量m³  C18=长度  C19=宽度/径级  C20=厚度
+  C21=计尺长(公式)  C22=计尺宽(公式)  C23=计尺厚(公式)  C24=片数/根数
+  C25=m²(公式)  C26=m³(公式)  ...  C35=检索规格(公式)
+
+公式列（C1/C2/C21-C23/C25-C26/C35）由模板预填，不可覆写。
 
 复用 log_filler.py 中的 monkey-patch 来绕过透视表问题。
 """
@@ -59,26 +71,36 @@ def _parse_date(date_str: str) -> datetime | None:
     return None
 
 
-def _find_first_empty_row(ws: Any, year_col: int = 1, start_row: int = 3) -> int:
-    """找到 sheet 中第一个空行（基于年份列）。"""
+def _check_sheet(wb: Any, name: str, template_path: Path) -> Any:
+    """校验目标工作表是否存在，不存在时给出清晰提示。"""
+    if name not in wb.sheetnames:
+        available = ", ".join(wb.sheetnames)
+        raise ValueError(
+            f"模板文件 '{template_path.name}' 中不存在工作表 '{name}'。"
+            f"可用工作表: [{available}]"
+        )
+    return wb[name]
+
+
+# 数据源表中的公式列，不可覆写
+FORMULA_COLS = frozenset({1, 2, 21, 22, 23, 25, 26, 35})
+
+
+def _find_first_empty_row(ws: Any, date_col: int = 3, start_row: int = 3) -> int:
+    """找到数据源表中第一个空行（基于日期列 C3）。"""
     for row in range(start_row, ws.max_row + 2):
-        val = ws.cell(row=row, column=year_col).value
+        val = ws.cell(row=row, column=date_col).value
         if val is None or val == "":
             return row
-        try:
-            if int(val) < 2000:
-                return row
-        except (ValueError, TypeError):
-            pass
     return ws.max_row + 1
 
 
 # ------------------------------------------------------------------
-# 1. 出库表 → 原木出入库-3-3.xlsx 数据源表
+# 1. 出库表 → 数据源表（工序=领用出库）
 # ------------------------------------------------------------------
 
 class LogOutputFiller:
-    """原木领用出库表 → 原木出入库数据源表（工序=领用出库）。"""
+    """原木领用出库表 → 数据源表（工序=领用出库）。"""
 
     SHEET_NAME = "数据源表"
 
@@ -90,7 +112,7 @@ class LogOutputFiller:
             *, species: str = "欧橡", owner: str = "新公司",
     ) -> Path:
         wb = openpyxl.load_workbook(self.template_path)
-        ws = wb[self.SHEET_NAME]
+        ws = _check_sheet(wb, self.SHEET_NAME, self.template_path)
         start = _find_first_empty_row(ws)
         current = start
         count = 0
@@ -101,20 +123,17 @@ class LogOutputFiller:
                 if e.diameter_cm <= 0:
                     continue
                 if date_obj:
-                    ws.cell(current, 1, date_obj.year)
-                    ws.cell(current, 2, date_obj.month)
-                    ws.cell(current, 3, date_obj)
-                ws.cell(current, 4, "大锯车间")
-                ws.cell(current, 5, "原料")
-                ws.cell(current, 6, "领用出库")
-                ws.cell(current, 7, species)
-                ws.cell(current, 8, "原木")
-                ws.cell(current, 9, r.meta.batch_id)
-                ws.cell(current, 11, "")  # 车牌号（出库表无）
-                ws.cell(current, 12, owner)
-                ws.cell(current, 13, e.log_id)
-                ws.cell(current, 19, e.diameter_cm)  # 径级
-                ws.cell(current, 22, e.diameter_cm)  # 计尺宽
+                    ws.cell(current, 3, date_obj)         # 日期
+                ws.cell(current, 4, "大锯车间")            # 车间
+                ws.cell(current, 5, "原料")                # 物料性质
+                ws.cell(current, 6, "领用出库")            # 工序
+                ws.cell(current, 7, species)               # 木种
+                ws.cell(current, 8, "原木")                # 货物名称
+                ws.cell(current, 9, r.meta.batch_id)       # 序号/批次号
+                ws.cell(current, 12, owner)                # 货物所有人
+                ws.cell(current, 13, e.log_id)             # 包号/根号
+                ws.cell(current, 19, e.diameter_cm)        # 宽度/径级
+                ws.cell(current, 24, 1)                    # 根数
                 current += 1
                 count += 1
 
@@ -125,13 +144,13 @@ class LogOutputFiller:
 
 
 # ------------------------------------------------------------------
-# 2. 入池表 → 刨切木方入池与上机表3-3.xlsx 原始表
+# 2. 入池表 → 数据源表（工序=入池）
 # ------------------------------------------------------------------
 
 class SoakPoolFiller:
-    """刨切木方入池表 → 原始表。"""
+    """刨切木方入池表 → 数据源表（工序=入池）。"""
 
-    SHEET_NAME = "原始表"
+    SHEET_NAME = "数据源表"
 
     def __init__(self, template_path: Path):
         self.template_path = template_path
@@ -141,7 +160,7 @@ class SoakPoolFiller:
             *, owner: str = "新公司",
     ) -> Path:
         wb = openpyxl.load_workbook(self.template_path)
-        ws = wb[self.SHEET_NAME]
+        ws = _check_sheet(wb, self.SHEET_NAME, self.template_path)
         start = _find_first_empty_row(ws)
         current = start
         count = 0
@@ -150,23 +169,19 @@ class SoakPoolFiller:
             date_obj = _parse_date(r.meta.date)
             for e in r.entries:
                 if date_obj:
-                    ws.cell(current, 1, date_obj.year)  # 入池年
-                    ws.cell(current, 2, date_obj.month)  # 入池月
-                    ws.cell(current, 3, date_obj)  # 入池日期
-                ws.cell(current, 4, r.meta.pool_number)  # 池号
-                ws.cell(current, 5, r.meta.batch_id)  # 批号
-                ws.cell(current, 6, r.meta.owner or owner)  # 货物所有人
-                ws.cell(current, 8, r.meta.craft or "刨切")  # 工艺
-                ws.cell(current, 9, r.meta.board_thickness)  # 表板厚度
-                ws.cell(current, 10, r.meta.material_name or "大方")  # 物料名称
-                ws.cell(current, 11, e.length_mm)  # 长
-                ws.cell(current, 12, e.width_mm)  # 宽
-                ws.cell(current, 13, e.thickness_mm)  # 厚
-                # 立方数 = L * W * T / 1e9
-                if e.length_mm > 0 and e.width_mm > 0 and e.thickness_mm > 0:
-                    vol = e.length_mm * e.width_mm * e.thickness_mm / 1e9
-                    ws.cell(current, 14, round(vol, 3))  # 立方数
-                ws.cell(current, 15, 1)  # 根数（每行1根）
+                    ws.cell(current, 3, date_obj)                      # 日期
+                ws.cell(current, 5, "半成品")                           # 物料性质
+                ws.cell(current, 6, "入池")                             # 工序
+                ws.cell(current, 7, "欧橡")                             # 木种
+                ws.cell(current, 8, "大方")                             # 货物名称
+                ws.cell(current, 9, r.meta.batch_id)                   # 序号/批次号
+                ws.cell(current, 12, r.meta.owner or owner)            # 货物所有人
+                ws.cell(current, 15, r.meta.craft or "刨切")            # 工艺
+                ws.cell(current, 16, r.meta.pool_number)               # 池号
+                ws.cell(current, 18, e.length_mm)                      # 长度
+                ws.cell(current, 19, e.width_mm)                       # 宽度
+                ws.cell(current, 20, e.thickness_mm)                   # 厚度
+                ws.cell(current, 24, 1)                                # 根数
                 current += 1
                 count += 1
 
@@ -177,17 +192,13 @@ class SoakPoolFiller:
 
 
 # ------------------------------------------------------------------
-# 3. 上机表 → 刨切木方入池与上机表3-3.xlsx 原始表（上机部分）
+# 3. 上机表 → 数据源表（工序=生产/刨切）
 # ------------------------------------------------------------------
 
 class SlicingFiller:
-    """刨切上机表 → 原始表（更新上机列）。
+    """刨切上机表 → 数据源表（工序=生产）。"""
 
-    注意：上机数据需要与已有的入池行匹配（按批号+序号），
-    或追加到新行。当前简化为追加新行。
-    """
-
-    SHEET_NAME = "原始表"
+    SHEET_NAME = "数据源表"
 
     def __init__(self, template_path: Path):
         self.template_path = template_path
@@ -197,7 +208,7 @@ class SlicingFiller:
             *, owner: str = "新公司",
     ) -> Path:
         wb = openpyxl.load_workbook(self.template_path)
-        ws = wb[self.SHEET_NAME]
+        ws = _check_sheet(wb, self.SHEET_NAME, self.template_path)
         start = _find_first_empty_row(ws)
         current = start
         count = 0
@@ -205,21 +216,18 @@ class SlicingFiller:
         for r in results:
             date_obj = _parse_date(r.meta.date)
             for e in r.entries:
-                # 入池信息留空（上机数据与入池分开填）
-                ws.cell(current, 5, r.meta.batch_id)  # 批号
-                ws.cell(current, 6, r.meta.owner or owner)  # 货物所有人
-                ws.cell(current, 8, "刨切")  # 工艺
-                ws.cell(current, 10, "大方")  # 物料名称
-                ws.cell(current, 12, e.width_mm)  # 宽
-                ws.cell(current, 13, e.thickness_mm)  # 厚
-                # 上机列
                 if date_obj:
-                    ws.cell(current, 16, date_obj.year)  # 上机年
-                    ws.cell(current, 17, date_obj.month)  # 上机月
-                    ws.cell(current, 18, date_obj)  # 上机日期
-                ws.cell(current, 19, 1)  # 上机根数
-                if e.core_thickness_mm > 0:
-                    ws.cell(current, 20, e.core_thickness_mm)  # 尾板厚度
+                    ws.cell(current, 3, date_obj)                      # 日期
+                ws.cell(current, 5, "半成品")                           # 物料性质
+                ws.cell(current, 6, "生产")                             # 工序
+                ws.cell(current, 7, "欧橡")                             # 木种
+                ws.cell(current, 8, "刨切表板")                         # 货物名称
+                ws.cell(current, 9, r.meta.batch_id)                   # 序号/批次号
+                ws.cell(current, 12, r.meta.owner or owner)            # 货物所有人
+                ws.cell(current, 15, "刨切")                            # 工艺
+                ws.cell(current, 19, e.width_mm)                       # 宽度
+                ws.cell(current, 20, e.thickness_mm)                   # 厚度（大方厚）
+                ws.cell(current, 24, 1)                                # 根数
                 current += 1
                 count += 1
 
@@ -230,15 +238,13 @@ class SlicingFiller:
 
 
 # ------------------------------------------------------------------
-# 4. 打包报表 → 表板统计-20260304.xlsx 数据源表
+# 4. 打包报表 → 数据源表（工序=打包）
 # ------------------------------------------------------------------
 
 class PackingFiller:
-    """表板打包报表 → 表板统计数据源表。"""
+    """表板打包报表 → 数据源表（工序=打包）。"""
 
     SHEET_NAME = "数据源表"
-    # 表板统计数据源表表头在 R2（R1是行次标签），数据从 R3 开始
-    DATA_START_ROW = 3
 
     def __init__(self, template_path: Path):
         self.template_path = template_path
@@ -248,8 +254,8 @@ class PackingFiller:
             *, species: str = "欧橡", workshop: str = "大锯车间",
     ) -> Path:
         wb = openpyxl.load_workbook(self.template_path)
-        ws = wb[self.SHEET_NAME]
-        start = _find_first_empty_row(ws, year_col=1, start_row=self.DATA_START_ROW)
+        ws = _check_sheet(wb, self.SHEET_NAME, self.template_path)
+        start = _find_first_empty_row(ws)
         current = start
         count = 0
 
@@ -259,30 +265,20 @@ class PackingFiller:
                 if e.piece_count <= 0:
                     continue
                 if date_obj:
-                    ws.cell(current, 1, date_obj.year)  # 年
-                    ws.cell(current, 2, date_obj.month)  # 月
-                    ws.cell(current, 3, date_obj)  # 日期
-                ws.cell(current, 4, workshop)  # 车间
-                ws.cell(current, 5, "产品")  # 物料性质
-                ws.cell(current, 6, "打包")  # 工序
-                ws.cell(current, 7, species)  # 木种
-                ws.cell(current, 8, "刨切表板")  # 货物名称
-                ws.cell(current, 10, "")  # 送货客户
-                ws.cell(current, 12, self._map_owner(e.owner))  # 货物所有人
-                ws.cell(current, 13, e.package_id)  # 包号
-                ws.cell(current, 14, e.grade)  # 等级
-                ws.cell(current, 15, e.craft)  # 工艺
-                ws.cell(current, 18, e.length_mm)  # 长度
-                ws.cell(current, 19, e.width_mm)  # 宽度
-                ws.cell(current, 20, e.thickness)  # 厚度
-                ws.cell(current, 21, e.calc_length_mm)  # 计尺长
-                ws.cell(current, 22, e.calc_width_mm)  # 计尺宽
-                ws.cell(current, 23, e.calc_thickness)  # 计尺厚
-                ws.cell(current, 24, e.piece_count)  # 片数
-                # 平方数：计尺长 * 计尺宽 * 片数 / 1e6
-                if e.calc_length_mm > 0 and e.calc_width_mm > 0 and e.piece_count > 0:
-                    area = e.calc_length_mm * e.calc_width_mm * e.piece_count / 1e6
-                    ws.cell(current, 25, round(area, 3))  # m²
+                    ws.cell(current, 3, date_obj)                      # 日期
+                ws.cell(current, 4, workshop)                          # 车间
+                ws.cell(current, 5, "产品")                             # 物料性质
+                ws.cell(current, 6, "打包")                             # 工序
+                ws.cell(current, 7, species)                           # 木种
+                ws.cell(current, 8, "刨切表板")                         # 货物名称
+                ws.cell(current, 12, self._map_owner(e.owner))         # 货物所有人
+                ws.cell(current, 13, e.package_id)                     # 包号
+                ws.cell(current, 14, e.grade)                          # 等级
+                ws.cell(current, 15, e.craft)                          # 工艺
+                ws.cell(current, 18, e.length_mm)                      # 长度
+                ws.cell(current, 19, e.width_mm)                       # 宽度
+                ws.cell(current, 20, e.thickness)                      # 厚度
+                ws.cell(current, 24, e.piece_count)                    # 片数
                 current += 1
                 count += 1
 

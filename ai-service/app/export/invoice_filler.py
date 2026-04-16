@@ -73,6 +73,12 @@ class InvoiceFiller:
             保存的文件路径。
         """
         wb = openpyxl.load_workbook(self.template_path)
+        if self.sheet_name not in wb.sheetnames:
+            available = ", ".join(wb.sheetnames)
+            raise ValueError(
+                f"模板文件 '{self.template_path.name}' 中不存在工作表 '{self.sheet_name}'。"
+                f"可用工作表: [{available}]"
+            )
         ws = wb[self.sheet_name]
 
         # 找到第一个空行（表头在第 2 行，数据从第 3 行开始）
