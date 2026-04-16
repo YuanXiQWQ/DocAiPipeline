@@ -281,7 +281,7 @@ export default function App() {
             batchAbortRef.current = null;
         }
         setFiles(prev => prev.map(f =>
-            f.status === "processing" ? {...f, status: "paused" as FileStatus, progressStage: "已暂停"} : f
+            f.status === "processing" ? {...f, status: "paused" as FileStatus, progressStage: "upload.file_paused"} : f
         ));
     }, []);
 
@@ -560,6 +560,26 @@ function ProcessingFlow({
         error: t("upload.file_error"),
     };
 
+    /** 解析后端发送的结构化 stage key 并翻译 */
+    const translateStage = (stage: string): string => {
+        if (!stage) return "";
+        // 格式: "progress.extracting:doc_type:current:total"
+        if (stage.startsWith("progress.extracting:")) {
+            const parts = stage.split(":");
+            const docType = parts[1] || "";
+            const current = parts[2] || "";
+            const total = parts[3] || "";
+            const typeName = DOC_TYPE_KEYS[docType] ? t(DOC_TYPE_KEYS[docType]) : docType;
+            return t("progress.extracting")
+                .replace("{type}", typeName)
+                .replace("{current}", current)
+                .replace("{total}", total);
+        }
+        // 其他 key 直接翻译
+        const translated = t(stage);
+        return translated !== stage ? translated : stage;
+    };
+
     const selectedFile = selectedFileIndex >= 0 ? files[selectedFileIndex] : null;
 
     /* 步骤指示器数据 */
@@ -803,7 +823,7 @@ function ProcessingFlow({
                                                     {(entry.file.size / 1024).toFixed(1)} KB
                                                     {entry.progressStage && (
                                                         <span
-                                                            className="ml-2 text-primary-500">{entry.progressStage}</span>
+                                                            className="ml-2 text-primary-500">{translateStage(entry.progressStage)}</span>
                                                     )}
                                                     {entry.result && (
                                                         <span className="ml-2 text-emerald-600">

@@ -370,11 +370,11 @@ def _process_single_file(
 
     # 阶段 1：分类（0-20%）
     if actual_type == "auto":
-        _report(5, "分类中")
+        _report(5, "progress.classifying")
         classify_result = _classify_document(images[0])
         actual_type = classify_result.doc_type
         logger.info(f"自动分类: {filename} → {actual_type} (置信度: {classify_result.confidence})")
-    _report(20, "分类完成")
+    _report(20, "progress.classified")
 
     warnings: list[str] = []
     results: list[Any] = []
@@ -384,7 +384,7 @@ def _process_single_file(
     extract_range = extract_end - extract_start
 
     if actual_type == "customs":
-        _report(extract_start, f"识别进口单据 (共 {total_pages} 页)")
+        _report(extract_start, f"progress.extracting:{actual_type}:{1}:{total_pages}")
         pipeline = _get_pipeline()
         pipeline_result = pipeline.process(save_path)
         results = [r.model_dump() for r in pipeline_result.records]
@@ -394,13 +394,13 @@ def _process_single_file(
             if i < len(results):
                 results[i]["crop_image_path"] = crop_path
             pct = extract_start + int(extract_range * (i + 1) / total_pages)
-            _report(pct, f"识别进口单据 第 {i + 1}/{total_pages} 页")
+            _report(pct, f"progress.extracting:{actual_type}:{i + 1}:{total_pages}")
 
     elif actual_type == "log_measurement":
         extractor = _get_log_extractor()
         for i, img in enumerate(images):
             _report(extract_start + int(extract_range * i / total_pages),
-                    f"识别检尺单 第 {i + 1}/{total_pages} 页")
+                    f"progress.extracting:{actual_type}:{i + 1}:{total_pages}")
             crop_path = _save_crop(img, filename, i + 1)
             r = extractor.extract_page(img, filename=filename, page=i + 1)
             data = r.model_dump()
@@ -409,27 +409,22 @@ def _process_single_file(
             logger.info(f"检尺单识别: {filename} 第 {i + 1}/{total_pages} 页完成")
 
     elif actual_type in ("log_output", "soak_pool", "slicing", "packing"):
-        type_names = {
-            "log_output": "出库表", "soak_pool": "入池表",
-            "slicing": "上机表", "packing": "打包表",
-        }
-        type_name = type_names.get(actual_type, actual_type)
         extractor = _get_factory_extractor()
         for i, img in enumerate(images):
             _report(extract_start + int(extract_range * i / total_pages),
-                    f"识别{type_name} 第 {i + 1}/{total_pages} 页")
+                    f"progress.extracting:{actual_type}:{i + 1}:{total_pages}")
             crop_path = _save_crop(img, filename, i + 1)
             r = extractor.extract(img, doc_type=actual_type, filename=filename, page=i + 1)
             data = r.model_dump()
             data["crop_image_path"] = crop_path
             results.append(data)
-            logger.info(f"{type_name}识别: {filename} 第 {i + 1}/{total_pages} 页完成")
+            logger.info(f"{actual_type}识别: {filename} 第 {i + 1}/{total_pages} 页完成")
 
     else:
         raise ValueError(f"不支持的文档类型: {actual_type}")
 
     # 阶段 3：保存结果（90-100%）
-    _report(90, "保存结果")
+    _report(90, "progress.saving")
     history_id = ""
     try:
         rec = history.save_record(
@@ -456,7 +451,7 @@ def _process_single_file(
     except Exception as e:
         logger.warning(f"写入汇总明细失败: {e}")
 
-    _report(100, "完成")
+    _report(100, "progress.done")
     return ProcessResponse(
         doc_type=actual_type,
         filename=filename,
@@ -514,7 +509,7 @@ async def process_batch(
                     "total": total,
                     "filename": filename,
                     "percent": 0,
-                    "stage": "开始处理",
+                    "stage": "progress.starting",
                 }),
             }
 
