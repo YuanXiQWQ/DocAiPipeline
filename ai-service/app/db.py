@@ -113,16 +113,33 @@ CREATE TABLE IF NOT EXISTS history_records (
 
 CREATE INDEX IF NOT EXISTS idx_hr_doc_type ON history_records(doc_type);
 CREATE INDEX IF NOT EXISTS idx_hr_timestamp ON history_records(timestamp);
+
+CREATE TABLE IF NOT EXISTS templates (
+    id              TEXT PRIMARY KEY,
+    name            TEXT NOT NULL DEFAULT '',
+    filename        TEXT NOT NULL DEFAULT '',
+    file_path       TEXT NOT NULL DEFAULT '',
+    types           TEXT NOT NULL DEFAULT '[]',
+    default_for     TEXT NOT NULL DEFAULT '[]',
+    sheet_names     TEXT NOT NULL DEFAULT '[]',
+    size_bytes      INTEGER NOT NULL DEFAULT 0,
+    builtin         INTEGER NOT NULL DEFAULT 0,
+    imported_at     TEXT NOT NULL DEFAULT '',
+    last_used_at    TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_tpl_builtin ON templates(builtin);
 """
 
 
 def init_db() -> None:
-    """建表 + 自动迁移旧 JSON 数据（幂等）。"""
+    """建表 + 自动迁移旧 JSON 数据 + 注册内置模板（幂等）。"""
     conn = get_conn()
     conn.executescript(_SCHEMA_SQL)
     conn.commit()
     logger.info(f"SQLite 数据库已初始化: {db_path()}")
     _migrate_json_data(conn)
+    _register_builtin_templates(conn)
 
 
 # ------------------------------------------------------------------
@@ -249,3 +266,88 @@ def _migrate_history_records(conn: sqlite3.Connection) -> None:
     conn.commit()
     if inserted:
         logger.info(f"已从 history/*.json 迁移 {inserted} 条记录到 SQLite")
+
+
+# ------------------------------------------------------------------
+# 内置模板自动注册
+# ------------------------------------------------------------------
+
+# 内置模板定义：(文件名, 显示名, 适用类型, 默认类型)
+_BUILTIN_TEMPLATES: list[tuple[str, str, list[str], list[str]]] = [
+    (
+        "数据统计_模板.xlsx",
+        "数据统计表",
+        ["log_measurement", "log_output", "soak_pool", "slicing", "packing"],
+        ["log_measurement", "log_output", "soak_pool", "slicing", "packing"],
+    ),
+]
+
+
+def _builtin_models_dir() -> Path:
+    """内置模板所在目录（兼容 PyInstaller 打包与开发模式）。"""
+    import sys
+    if getattr(sys, "frozen", False):
+        base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    else:
+        base = Path(__file__).resolve().parent.parent  # ai-service/
+    return base / "models"
+
+
+def _register_builtin_templates(conn: sqlite3.Connection) -> None:
+    """首次启动时将内置模板注册到 templates 表（幂等）。"""
+    from datetime import datetime, timezone
+
+    models_dir = _builtin_models_dir()
+    now = datetime.now(timezone.utc).isoformat()
+
+    for filename, display_name, types, default_for in _BUILTIN_TEMPLATES:
+        filepath = models_dir / filename
+        if not filepath.exists():
+            logger.warning(f"内置模板文件不存在: {filepath}")
+            continue
+
+        # 检查是否已注册（按 builtin=1 且 filename 匹配）
+        existing = conn.execute(
+            "SELECT id FROM templates WHERE builtin = 1 AND filename = ?",
+            (filename,),
+        ).fetchone()
+        if existing:
+            # 更新文件路径（打包后路径可能变化）
+            conn.execute(
+                "UPDATE templates SET file_path = ? WHERE id = ?",
+                (str(filepath), existing["id"]),
+            )
+            continue
+
+        # 读取工作表名称
+        sheet_names: list[str] = []
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(str(filepath), read_only=True, data_only=True)
+            sheet_names = wb.sheetnames
+            wb.close()
+        except Exception as e:
+            logger.warning(f"读取内置模板工作表失败: {e}")
+
+        tpl_id = f"builtin_{filename}"
+        conn.execute(
+            """INSERT INTO templates
+               (id, name, filename, file_path, types, default_for,
+                sheet_names, size_bytes, builtin, imported_at, last_used_at)
+               VALUES (?,?,?,?,?,?,?,?,1,?,?)""",
+            (
+                tpl_id,
+                display_name,
+                filename,
+                str(filepath),
+                json.dumps(types, ensure_ascii=False),
+                json.dumps(default_for, ensure_ascii=False),
+                json.dumps(sheet_names, ensure_ascii=False),
+                filepath.stat().st_size,
+                now,
+                "",
+            ),
+        )
+        logger.info(f"已注册内置模板: {display_name} ({filename})")
+
+    conn.commit()

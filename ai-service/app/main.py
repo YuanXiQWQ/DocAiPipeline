@@ -31,7 +31,7 @@ from loguru import logger
 from app.config import AVAILABLE_MODELS, settings
 from app.db import close_all as close_all_db, init_db
 from app.pipeline import Pipeline
-from app.routers import fill, history_router, process, scanner, summary
+from app.routers import fill, history_router, process, scanner, summary, template_lib
 from app.schemas import HealthResponse, PipelineResult
 
 # 懒加载管线（模型较重）
@@ -95,6 +95,7 @@ app.include_router(fill.router)
 app.include_router(history_router.router)
 app.include_router(summary.router)
 app.include_router(scanner.router)
+app.include_router(template_lib.router)
 
 
 # ------------------------------------------------------------------

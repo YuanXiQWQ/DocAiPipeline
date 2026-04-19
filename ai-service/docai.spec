@@ -88,6 +88,7 @@ hiddenimports = [
     "app.routers.history_router",
     "app.routers.summary",
     "app.routers.scanner",
+    "app.routers.template_lib",
     "app.history",
     "app.db",
     "app.summary_store",

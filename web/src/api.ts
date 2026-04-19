@@ -43,12 +43,14 @@ export async function processDocument(
 export async function fillExcel(
     docType: string,
     results: unknown[],
-    template?: File
+    template?: File,
+    templateId?: string
 ): Promise<FillResult> {
     const fd = new FormData();
     fd.append("doc_type", docType);
     fd.append("results_json", JSON.stringify(results));
     if (template) fd.append("template", template);
+    if (templateId) fd.append("template_id", templateId);
     const {data} = await api.post<FillResult>("/api/fill", fd);
     return data;
 }
@@ -503,6 +505,135 @@ export interface BatchDoneEvent {
     total: number;
     success: number;
     failed: number;
+}
+
+// ------------------------------------------------------------------
+// 模板库
+// ------------------------------------------------------------------
+
+export interface TemplateRecord {
+    id: string;
+    name: string;
+    filename: string;
+    types: string[];
+    default_for: string[];
+    sheet_names: string[];
+    size_bytes: number;
+    builtin: boolean;
+    imported_at: string;
+    last_used_at: string;
+}
+
+export interface TypeRecommendation {
+    recommended: string[];
+    all_types: string[];
+    reason: string;
+}
+
+export interface FillCheckItem {
+    doc_type: string;
+    matched_templates: {
+        id: string;
+        name: string;
+        filename: string;
+        builtin: boolean;
+        is_default: boolean;
+    }[];
+    default_template_id: string | null;
+    has_match: boolean;
+}
+
+export interface FillCheckResponse {
+    items: FillCheckItem[];
+    all_matched: boolean;
+}
+
+export async function listTemplates(params?: {
+    sort_by?: string;
+    category?: string;
+}): Promise<TemplateRecord[]> {
+    const {data} = await api.get<TemplateRecord[]>("/api/template-lib", {params});
+    return data;
+}
+
+export async function getTemplate(id: string): Promise<TemplateRecord> {
+    const {data} = await api.get<TemplateRecord>(`/api/template-lib/${id}`);
+    return data;
+}
+
+export async function importTemplate(
+    file: File,
+    name?: string,
+    types?: string[]
+): Promise<TemplateRecord> {
+    const fd = new FormData();
+    fd.append("file", file);
+    if (name) fd.append("name", name);
+    if (types) fd.append("types_json", JSON.stringify(types));
+    const {data} = await api.post<TemplateRecord>("/api/template-lib", fd);
+    return data;
+}
+
+export async function recommendTemplateTypes(file: File): Promise<TypeRecommendation> {
+    const fd = new FormData();
+    fd.append("file", file);
+    const {data} = await api.post<TypeRecommendation>("/api/template-lib/recommend-types", fd);
+    return data;
+}
+
+export async function updateTemplate(
+    id: string,
+    body: { name?: string; types?: string[] }
+): Promise<TemplateRecord> {
+    const {data} = await api.put<TemplateRecord>(`/api/template-lib/${id}`, body);
+    return data;
+}
+
+export async function setTemplateDefault(
+    id: string,
+    docType: string,
+    isDefault: boolean
+): Promise<TemplateRecord> {
+    const {data} = await api.post<TemplateRecord>(`/api/template-lib/${id}/set-default`, {
+        doc_type: docType,
+        is_default: isDefault,
+    });
+    return data;
+}
+
+export async function deleteTemplate(id: string): Promise<void> {
+    await api.delete(`/api/template-lib/${id}`);
+}
+
+export async function deleteTemplates(ids: string[]): Promise<void> {
+    await Promise.all(ids.map((id) => api.delete(`/api/template-lib/${id}`)));
+}
+
+export function getTemplateDownloadUrl(id: string): string {
+    return `/api/template-lib/${id}/download`;
+}
+
+export async function previewTemplate(id: string): Promise<{
+    sheet_names: string[];
+    sheets: Record<string, {
+        headers: unknown[];
+        rows: unknown[][];
+        total_rows: number;
+        total_cols: number;
+    }>;
+}> {
+    const {data} = await api.get(`/api/template-lib/${id}/preview`);
+    return data;
+}
+
+export async function findMatchingTemplates(docType: string): Promise<TemplateRecord[]> {
+    const {data} = await api.get<TemplateRecord[]>(`/api/template-lib/match/${docType}`);
+    return data;
+}
+
+export async function fillCheck(docTypes: string[]): Promise<FillCheckResponse> {
+    const {data} = await api.post<FillCheckResponse>("/api/fill/check", {doc_types: docTypes});
+    return data;
 }
 
 /**

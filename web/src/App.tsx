@@ -26,6 +26,7 @@ import {useT, setLocale, type Locale} from "./i18n";
 import SettingsPanel from "./SettingsPanel";
 import HistoryPanel from "./HistoryPanel";
 import DashboardPanel from "./DashboardPanel";
+import TemplateLibPanel from "./TemplateLibPanel";
 import {
     type BatchErrorEvent,
     type BatchProgressEvent,
@@ -33,7 +34,9 @@ import {
     type ClassifyResult,
     DOC_TYPE_KEYS,
     extractErrorMessage,
+    fillCheck,
     fillExcel,
+    type FillCheckResponse,
     type FillResult,
     getPlatform,
     openFile,
@@ -60,7 +63,7 @@ const DOC_ICONS: Record<string, React.ReactNode> = {
 };
 
 /* UI 视图状态（与后台处理解耦） */
-type View = "upload" | "review" | "filling" | "done";
+type View = "upload" | "review" | "fill_confirm" | "filling" | "done";
 
 /* 每个文件的处理状态 */
 type FileStatus = "waiting" | "processing" | "paused" | "success" | "error";
@@ -92,6 +95,10 @@ export default function App() {
     const [fillResult, setFillResult] = useState<FillResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [templateFile, setTemplateFile] = useState<File | null>(null);
+
+    /* 填充确认步骤 */
+    const [fillCheckResult, setFillCheckResult] = useState<FillCheckResponse | null>(null);
+    const [selectedTemplateIds, setSelectedTemplateIds] = useState<Record<string, string>>({});
 
     const inputRef = useRef<HTMLInputElement>(null);
     const [backendOk, setBackendOk] = useState<boolean | null>(null);
@@ -292,23 +299,50 @@ export default function App() {
         ));
     }, []);
 
+    const handleFillCheck = useCallback(async () => {
+        if (!selectedResult) return;
+        setError(null);
+        try {
+            const docTypes = [...new Set(files
+                .filter(f => f.status === "success" && f.result)
+                .map(f => f.result!.doc_type))];
+            if (docTypes.length === 0) docTypes.push(selectedResult.doc_type);
+            const checkRes = await fillCheck(docTypes);
+            setFillCheckResult(checkRes);
+            const defaults: Record<string, string> = {};
+            for (const item of checkRes.items) {
+                if (item.default_template_id) {
+                    defaults[item.doc_type] = item.default_template_id;
+                } else if (item.matched_templates.length > 0) {
+                    defaults[item.doc_type] = item.matched_templates[0].id;
+                }
+            }
+            setSelectedTemplateIds(defaults);
+            setView("fill_confirm");
+        } catch (err: unknown) {
+            setError(extractErrorMessage(err));
+        }
+    }, [selectedResult, files]);
+
     const handleFill = useCallback(async () => {
         if (!selectedResult) return;
         setView("filling");
         setError(null);
         try {
+            const tplId = selectedTemplateIds[selectedResult.doc_type];
             const res = await fillExcel(
                 selectedResult.doc_type,
                 selectedResult.results,
-                templateFile || undefined
+                templateFile || undefined,
+                tplId || undefined
             );
             setFillResult(res);
             setView("done");
         } catch (err: unknown) {
             setError(extractErrorMessage(err));
-            setView("review");
+            setView("fill_confirm");
         }
-    }, [selectedResult, templateFile]);
+    }, [selectedResult, templateFile, selectedTemplateIds]);
 
     const handleDownload = useCallback(async () => {
         if (!fillResult) return;
@@ -370,6 +404,7 @@ export default function App() {
     const navItems = [
         {to: "/", icon: <Home className="w-5 h-5"/>, label: t("step.upload")},
         {to: "/dashboard", icon: <BarChart3 className="w-5 h-5"/>, label: t("nav.dashboard")},
+        {to: "/templates", icon: <FileText className="w-5 h-5"/>, label: t("nav.template_lib")},
         {to: "/history", icon: <Clock className="w-5 h-5"/>, label: t("nav.history")},
         {to: "/settings", icon: <Settings className="w-5 h-5"/>, label: t("nav.settings")},
     ];
@@ -470,6 +505,9 @@ export default function App() {
                     <Route path="/dashboard" element={
                         <DashboardPanel/>
                     }/>
+                    <Route path="/templates" element={
+                        <TemplateLibPanel/>
+                    }/>
                     <Route path="*" element={
                         <ProcessingFlow
                             t={t}
@@ -484,7 +522,9 @@ export default function App() {
                             setDocType={setDocType}
                             fillResult={fillResult}
                             error={error}
+                            templateFile={templateFile}
                             setTemplateFile={setTemplateFile}
+                            setView={setView}
                             inputRef={inputRef}
                             dragging={dragging}
                             setDragging={setDragging}
@@ -494,8 +534,12 @@ export default function App() {
                             handleDrop={handleDrop}
                             handleProcess={handleProcess}
                             handleAbortAll={handleAbortAll}
+                            handleFillCheck={handleFillCheck}
                             handleFill={handleFill}
                             handleDownload={handleDownload}
+                            fillCheckResult={fillCheckResult}
+                            selectedTemplateIds={selectedTemplateIds}
+                            setSelectedTemplateIds={setSelectedTemplateIds}
                             isDesktop={isDesktop}
                             handleReset={handleReset}
                             handleGoHome={handleGoHome}
@@ -555,10 +599,12 @@ export default function App() {
 function ProcessingFlow({
                             t, view, files, selectedFileIndex, selectedResult, isProcessing,
                             removeFile, handleSelectFile, docType, setDocType,
-                            fillResult, error, setTemplateFile,
+                            fillResult, error, templateFile, setTemplateFile, setView,
                             inputRef, dragging, setDragging, preview,
                             needsSetup, handleFileSelect, handleDrop,
-                            handleProcess, handleAbortAll, handleFill, handleDownload, isDesktop, handleReset, handleGoHome,
+                            handleProcess, handleAbortAll, handleFillCheck, handleFill, handleDownload,
+                            fillCheckResult, selectedTemplateIds, setSelectedTemplateIds,
+                            isDesktop, handleReset, handleGoHome,
                             scanAvailable, scanDevices, scanSelectedDevice, setScanSelectedDevice,
                             scanning, scanMsg, handleScan,
                         }: {
@@ -574,7 +620,9 @@ function ProcessingFlow({
     setDocType: (d: string) => void;
     fillResult: FillResult | null;
     error: string | null;
+    templateFile: File | null;
     setTemplateFile: (f: File | null) => void;
+    setView: (v: View) => void;
     inputRef: React.RefObject<HTMLInputElement | null>;
     dragging: boolean;
     setDragging: (d: boolean) => void;
@@ -584,8 +632,12 @@ function ProcessingFlow({
     handleDrop: (e: React.DragEvent) => void;
     handleProcess: () => void;
     handleAbortAll: () => void;
+    handleFillCheck: () => void;
     handleFill: () => void;
     handleDownload: () => void;
+    fillCheckResult: FillCheckResponse | null;
+    selectedTemplateIds: Record<string, string>;
+    setSelectedTemplateIds: (ids: Record<string, string>) => void;
     isDesktop: boolean;
     handleReset: () => void;
     handleGoHome: () => void;
@@ -632,6 +684,7 @@ function ProcessingFlow({
         ["upload", t("step.upload")],
         ["processing", t("step.processing")],
         ["review", t("step.review")],
+        ["fill_confirm", t("step.fill_confirm")],
         ["done", t("step.done")],
     ];
     const successCount = files.filter(f => f.status === "success").length;
@@ -663,11 +716,13 @@ function ProcessingFlow({
                         (s === "upload" && view === "upload") ||
                         (s === "processing" && (isProcessing || view === "filling")) ||
                         (s === "review" && view === "review") ||
+                        (s === "fill_confirm" && (view === "fill_confirm" || view === "filling")) ||
                         (s === "done" && view === "done");
                     const completed =
                         (s === "upload" && view !== "upload") ||
-                        (s === "processing" && !isProcessing && ["review", "done"].includes(view) && successCount > 0) ||
-                        (s === "review" && view === "done");
+                        (s === "processing" && !isProcessing && ["review", "fill_confirm", "filling", "done"].includes(view) && successCount > 0) ||
+                        (s === "review" && ["fill_confirm", "filling", "done"].includes(view)) ||
+                        (s === "fill_confirm" && view === "done");
                     return (
                         <div key={s} className="flex items-center gap-2">
                             {i > 0 && (
@@ -1186,18 +1241,6 @@ function ProcessingFlow({
                         </div>
                     </div>
 
-                    {/* Excel 模板上传 */}
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                        <h3 className="font-medium text-slate-700 mb-3">{t("upload.template")}</h3>
-                        <p className="text-sm text-slate-500 mb-3">{t("upload.template_hint")}</p>
-                        <input
-                            type="file"
-                            accept=".xlsx"
-                            onChange={(e) => setTemplateFile(e.target.files?.[0] || null)}
-                            className="text-sm text-slate-600"
-                        />
-                    </div>
-
                     {/* 操作按钮 */}
                     <div className="flex gap-4 justify-end">
                         <button
@@ -1207,11 +1250,134 @@ function ProcessingFlow({
                             {t("upload.reupload")}
                         </button>
                         <button
-                            onClick={handleFill}
+                            onClick={handleFillCheck}
                             className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors font-medium flex items-center gap-2"
                         >
                             <Download className="w-4 h-4"/>
                             {t("review.fill")}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* ===== 填充确认视图 ===== */}
+            {view === "fill_confirm" && fillCheckResult && (
+                <div className="space-y-6">
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                        <h2 className="text-lg font-semibold text-slate-800 mb-4">{t("fill_confirm.title")}</h2>
+                        <p className="text-sm text-slate-500 mb-6">{t("fill_confirm.hint")}</p>
+
+                        <div className="space-y-4">
+                            {fillCheckResult.items.map((item) => (
+                                <div key={item.doc_type}
+                                     className={`rounded-xl border p-4 ${item.has_match ? "border-slate-200" : "border-amber-300 bg-amber-50"}`}>
+                                    <div className="flex items-center gap-2 mb-3">
+                                        {DOC_ICONS[item.doc_type] || <FileText className="w-5 h-5"/>}
+                                        <span className="font-medium text-slate-700">
+                                            {t(DOC_TYPE_KEYS[item.doc_type] || item.doc_type)}
+                                        </span>
+                                        {item.has_match ? (
+                                            <CheckCircle className="w-4 h-4 text-emerald-500 ml-auto"/>
+                                        ) : (
+                                            <AlertCircle className="w-4 h-4 text-amber-500 ml-auto"/>
+                                        )}
+                                    </div>
+
+                                    {item.has_match ? (
+                                        <div className="space-y-2">
+                                            {item.matched_templates.map((tpl) => (
+                                                <label key={tpl.id}
+                                                       className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition ${
+                                                           selectedTemplateIds[item.doc_type] === tpl.id
+                                                               ? "bg-primary-50 border border-primary-200"
+                                                               : "hover:bg-slate-50"
+                                                       }`}>
+                                                    <input
+                                                        type="radio"
+                                                        name={`tpl-${item.doc_type}`}
+                                                        checked={selectedTemplateIds[item.doc_type] === tpl.id}
+                                                        onChange={() => setSelectedTemplateIds({
+                                                            ...selectedTemplateIds,
+                                                            [item.doc_type]: tpl.id,
+                                                        })}
+                                                        className="accent-primary-600"
+                                                    />
+                                                    <FileText className="w-4 h-4 text-slate-400"/>
+                                                    <span className="text-sm text-slate-700">{tpl.name}</span>
+                                                    {tpl.builtin && (
+                                                        <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded">
+                                                            {t("template_lib.builtin")}
+                                                        </span>
+                                                    )}
+                                                    {tpl.is_default && (
+                                                        <span className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded">
+                                                            {t("fill_confirm.default")}
+                                                        </span>
+                                                    )}
+                                                </label>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-sm text-amber-700">
+                                            <p>{t("fill_confirm.no_template")}</p>
+                                            <p className="text-xs mt-1 text-amber-600">{t("fill_confirm.upload_hint")}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Excel 模板上传（拖放 + 点击） */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                        <h3 className="font-medium text-slate-700 mb-3">{t("upload.template")}</h3>
+                        <p className="text-sm text-slate-500 mb-3">{t("fill_confirm.upload_override")}</p>
+                        <div
+                            className="border-2 border-dashed border-slate-300 hover:border-primary-400 rounded-xl p-6 text-center cursor-pointer transition-colors"
+                            onClick={() => {
+                                const inp = document.createElement("input");
+                                inp.type = "file";
+                                inp.accept = ".xlsx";
+                                inp.onchange = () => { if (inp.files?.[0]) setTemplateFile(inp.files[0]); };
+                                inp.click();
+                            }}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => {
+                                e.preventDefault();
+                                const f = Array.from(e.dataTransfer.files).find(f => f.name.endsWith(".xlsx"));
+                                if (f) setTemplateFile(f);
+                            }}
+                        >
+                            <Upload className="w-8 h-8 mx-auto mb-2 text-slate-400"/>
+                            <p className="text-sm text-slate-500">{t("upload.hint")}</p>
+                            <p className="text-xs text-slate-400 mt-1">.xlsx</p>
+                        </div>
+                        {templateFile && (
+                            <div className="mt-3 flex items-center gap-2 text-sm text-emerald-600">
+                                <CheckCircle className="w-4 h-4"/>
+                                <span>{templateFile.name}</span>
+                                <button onClick={() => setTemplateFile(null)} className="text-slate-400 hover:text-red-500 ml-auto">
+                                    <X className="w-4 h-4"/>
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 操作按钮 */}
+                    <div className="flex gap-4 justify-end">
+                        <button
+                            onClick={() => { setView("review"); }}
+                            className="px-6 py-2.5 border border-slate-300 text-slate-600 rounded-xl hover:bg-slate-50 transition-colors"
+                        >
+                            {t("fill_confirm.back")}
+                        </button>
+                        <button
+                            onClick={handleFill}
+                            disabled={!fillCheckResult.all_matched && !templateFile}
+                            className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <Download className="w-4 h-4"/>
+                            {t("fill_confirm.confirm")}
                         </button>
                     </div>
                 </div>

@@ -1,16 +1,17 @@
 """Excel 填充路由：将识别结果写入目标 Excel 模板并返回下载链接。
 
-所有文档类型均写入同一个数据统计模板的“数据源表”工作表。
-模板解析优先级：用户上传 > 按 doc_type 存放的专用模板 > 内置默认模板。
+模板来源：用户上传 > 模板库指定 ID > 模板库默认模板。
 """
 
 from __future__ import annotations
 
+import json
 import shutil
 import sys
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -18,6 +19,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from app.config import settings
+from app.db import get_conn
 from app.export.factory_filler import (
     LogOutputFiller,
     PackingFiller,
@@ -28,27 +30,6 @@ from app.export.log_filler import LogFiller
 
 router = APIRouter(prefix="/api", tags=["填充"])
 
-# ------------------------------------------------------------------
-# 默认模板路径（可通过 API 覆盖）
-# ------------------------------------------------------------------
-
-TEMPLATES_DIR = Path(settings.output_dir) / "templates"
-
-
-def _builtin_template_path() -> Path:
-    """内置数据统计模板路径（兼容 PyInstaller 打包与开发模式）。"""
-    if getattr(sys, "frozen", False):
-        base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
-    else:
-        base = Path(__file__).resolve().parent.parent.parent  # ai-service/
-    return base / "models" / "数据统计_模板.xlsx"
-
-
-class FillRequest(BaseModel):
-    """填充请求：识别结果 JSON + 文档类型。"""
-    doc_type: str
-    results: list[dict]
-
 
 class FillResponse(BaseModel):
     """填充响应：下载链接。"""
@@ -57,118 +38,180 @@ class FillResponse(BaseModel):
     rows_written: int
 
 
-# ------------------------------------------------------------------
-# 模板管理端点
-# ------------------------------------------------------------------
-
-
-class TemplateInfo(BaseModel):
-    """模板信息。"""
-    name: str
+class FillCheckItem(BaseModel):
+    """填充检查结果的单项（某个 doc_type 的模板匹配情况）。"""
     doc_type: str
-    size_kb: float
+    matched_templates: list[dict[str, Any]]
+    default_template_id: str | None
+    has_match: bool
 
 
-@router.get("/templates", response_model=list[TemplateInfo])
-async def list_templates():
-    """列出已上传的 Excel 模板。"""
-    TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
-    result = []
-    for f in TEMPLATES_DIR.glob("*.xlsx"):
-        # 按子目录名判断 doc_type
-        doc_type = f.parent.name if f.parent != TEMPLATES_DIR else "unknown"
-        result.append(TemplateInfo(
-            name=f.name,
-            doc_type=doc_type,
-            size_kb=round(f.stat().st_size / 1024, 1),
+class FillCheckResponse(BaseModel):
+    """填充检查响应：告知前端每种文档类型的模板匹配情况。"""
+    items: list[FillCheckItem]
+    all_matched: bool
+
+
+# ------------------------------------------------------------------
+# 模板查找（基于模板库 SQLite）
+# ------------------------------------------------------------------
+
+
+def _find_template_from_db(doc_type: str) -> tuple[Path | None, str | None]:
+    """从模板库查找适用于 doc_type 的模板。
+
+    优先返回默认模板，否则返回最近使用的匹配模板。
+    返回 (file_path, template_id)，找不到则 (None, None)。
+    """
+    conn = get_conn()
+    # 优先查找默认模板
+    row = conn.execute(
+        """SELECT id, file_path FROM templates
+           WHERE types LIKE ? AND default_for LIKE ?
+           ORDER BY last_used_at DESC LIMIT 1""",
+        (f'%"{doc_type}"%', f'%"{doc_type}"%'),
+    ).fetchone()
+    if row:
+        p = Path(row["file_path"])
+        if p.exists():
+            return p, row["id"]
+    # 回退到任意匹配模板
+    row = conn.execute(
+        """SELECT id, file_path FROM templates
+           WHERE types LIKE ?
+           ORDER BY last_used_at DESC LIMIT 1""",
+        (f'%"{doc_type}"%',),
+    ).fetchone()
+    if row:
+        p = Path(row["file_path"])
+        if p.exists():
+            return p, row["id"]
+    return None, None
+
+
+def _get_template_by_id(template_id: str) -> Path:
+    """按 ID 获取模板文件路径。"""
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT file_path FROM templates WHERE id = ?", (template_id,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(404, f"模板不存在: {template_id}")
+    p = Path(row["file_path"])
+    if not p.exists():
+        raise HTTPException(404, f"模板文件丢失: {p.name}")
+    return p
+
+
+def _touch_template(template_id: str) -> None:
+    """更新模板的最近使用时间。"""
+    conn = get_conn()
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        "UPDATE templates SET last_used_at = ? WHERE id = ?",
+        (now, template_id),
+    )
+    conn.commit()
+
+
+@router.post("/fill/check", response_model=FillCheckResponse)
+async def fill_check(body: dict):
+    """填充前检查：查找每种文档类型对应的可用模板。
+
+    前端在“填充确认”步骤调用，展示模板匹配情况供用户确认/调整。
+    body: { "doc_types": ["customs", "log_measurement"] }
+    """
+    doc_types: list[str] = body.get("doc_types", [])
+    if not doc_types:
+        raise HTTPException(400, "缺少 doc_types")
+
+    conn = get_conn()
+    items: list[FillCheckItem] = []
+
+    for dt in doc_types:
+        rows = conn.execute(
+            """SELECT id, name, filename, types, default_for, builtin
+               FROM templates WHERE types LIKE ?
+               ORDER BY
+                   CASE WHEN default_for LIKE ? THEN 0 ELSE 1 END,
+                   last_used_at DESC""",
+            (f'%"{dt}"%', f'%"{dt}"%'),
+        ).fetchall()
+
+        matched = []
+        default_id = None
+        for r in rows:
+            tpl = {
+                "id": r["id"],
+                "name": r["name"],
+                "filename": r["filename"],
+                "builtin": bool(r["builtin"]),
+                "is_default": dt in json.loads(r["default_for"]),
+            }
+            matched.append(tpl)
+            if tpl["is_default"] and default_id is None:
+                default_id = r["id"]
+
+        items.append(FillCheckItem(
+            doc_type=dt,
+            matched_templates=matched,
+            default_template_id=default_id,
+            has_match=len(matched) > 0,
         ))
-    # 也扫描子目录
-    for subdir in TEMPLATES_DIR.iterdir():
-        if subdir.is_dir():
-            for f in subdir.glob("*.xlsx"):
-                result.append(TemplateInfo(
-                    name=f.name,
-                    doc_type=subdir.name,
-                    size_kb=round(f.stat().st_size / 1024, 1),
-                ))
-    return result
 
-
-@router.post("/templates/{doc_type}")
-async def upload_template(
-        doc_type: str,
-        file: UploadFile = File(...),
-):
-    """上传 Excel 模板。按 doc_type 分目录存放。"""
-    if not file.filename or not file.filename.endswith(".xlsx"):
-        raise HTTPException(400, "请上传 .xlsx 文件")
-    target_dir = TEMPLATES_DIR / doc_type
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target = target_dir / file.filename
-    with open(target, "wb") as buf:
-        content = await file.read()
-        buf.write(content)
-    logger.info(f"模板上传: {doc_type}/{file.filename} ({len(content) / 1024:.1f}KB)")
-    return {"message": f"模板已保存: {target.relative_to(TEMPLATES_DIR)}"}
-
-
-# ------------------------------------------------------------------
-# 填充端点
-# ------------------------------------------------------------------
-
-
-# customs 使用独立的纸质发票记录表模板，不写入数据源表
-_NEED_OWN_TEMPLATE = frozenset({"customs"})
-
-
-def _find_template(doc_type: str) -> Path:
-    """查找模板文件。优先级：按 doc_type 存放的专用模板 > 内置默认模板。"""
-    # 1. 按 doc_type 查找专用模板
-    target_dir = TEMPLATES_DIR / doc_type
-    if target_dir.exists():
-        templates = list(target_dir.glob("*.xlsx"))
-        if templates:
-            return templates[0]
-    # 2. 需要独立模板的类型不回退到数据统计模板
-    if doc_type in _NEED_OWN_TEMPLATE:
-        raise HTTPException(
-            404,
-            f"未找到 {doc_type} 类型的专用模板，请在填充时上传模板或存放到 templates/{doc_type}/",
-        )
-    # 3. 回退到内置数据统计模板
-    builtin = _builtin_template_path()
-    if builtin.exists():
-        return builtin
-    raise HTTPException(404, f"未找到模板文件，请在填充时上传 Excel 模板")
+    return FillCheckResponse(
+        items=items,
+        all_matched=all(item.has_match for item in items),
+    )
 
 
 @router.post("/fill", response_model=FillResponse)
 async def fill_excel(
         doc_type: str = Form(...),
         results_json: str = Form(...),
+        template_id: str = Form(""),
         template: UploadFile | None = File(None),
 ):
     """将识别结果填入 Excel 模板。
 
-    - doc_type: 文档类型
-    - results_json: 识别结果的 JSON 字符串
-    - template: 可选，直接上传模板文件（不使用已存模板）
+    模板来源优先级：
+    1. 用户直接上传的模板文件 (template)
+    2. 指定模板库 ID (template_id)
+    3. 模板库中该 doc_type 的默认模板
     """
-    import json
-
     try:
         results_data = json.loads(results_json)
     except json.JSONDecodeError as e:
         raise HTTPException(400, f"JSON 解析失败: {e}")
 
     # 确定模板路径
+    used_template_id: str | None = None
+
     if template and template.filename:
-        # 使用上传的模板
+        # 1. 用户直接上传
         template_path = Path(settings.upload_dir) / f"tpl_{uuid.uuid4().hex[:6]}_{template.filename}"
         with open(template_path, "wb") as buf:
             buf.write(await template.read())
+    elif template_id:
+        # 2. 指定模板库 ID
+        template_path = _get_template_by_id(template_id)
+        used_template_id = template_id
     else:
-        template_path = _find_template(doc_type)
+        # 3. 自动从模板库查找
+        template_path, used_template_id = _find_template_from_db(doc_type)
+        if template_path is None:
+            raise HTTPException(
+                404,
+                json.dumps({
+                    "code": "no_template",
+                    "doc_type": doc_type,
+                    "message": f"模板库中没有适用于 {doc_type} 的模板，请先上传模板",
+                }, ensure_ascii=False),
+            )
+
+    # 更新模板使用时间
+    if used_template_id:
+        _touch_template(used_template_id)
 
     # 输出路径
     output_dir = Path(settings.output_dir)
