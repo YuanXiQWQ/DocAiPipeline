@@ -442,8 +442,14 @@ export async function getUpdateStatus(): Promise<UpdateStatus> {
     return data;
 }
 
-export async function triggerUpdateDownload(): Promise<{ message: string }> {
-    const {data} = await api.post<{ message: string }>("/api/update/download");
+export async function triggerUpdateDownload(): Promise<{ started: boolean; message: string }> {
+    const {data} = await api.post<{ started: boolean; message: string }>("/api/update/download");
+    return data;
+}
+
+// 【临时测试】强制触发下载最新 Release，跳过版本比较。验证后删除。
+export async function testTriggerUpdate(): Promise<{ started: boolean; message: string }> {
+    const {data} = await api.post<{ started: boolean; message: string }>("/api/update/test-trigger");
     return data;
 }
 

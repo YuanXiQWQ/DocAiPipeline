@@ -71,11 +71,21 @@ def _wait_for_server(host: str, port: int, timeout: float = 30.0) -> bool:
 
 
 def _base_dir() -> Path:
-    """获取应用根目录（兼容 PyInstaller onedir/onefile 模式）。
+    """获取应用根目录（存放用户数据、update_staging 等）。
 
-    - onedir 模式：_MEIPASS == exe 所在目录
-    - onefile 模式：_MEIPASS == 临时解压目录
+    - frozen 模式：exe 所在目录（dist/DocAI-Pipeline/）
     - 开发模式：脚本所在目录
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent
+    return Path(__file__).resolve().parent
+
+
+def _resource_dir() -> Path:
+    """获取打包资源目录（icon、web_dist、VERSION 等打包时嵌入的文件）。
+
+    - onedir 模式：_MEIPASS（即 _internal/ 子目录）
+    - 开发模式：与 _base_dir() 相同
     """
     if getattr(sys, "frozen", False):
         return Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
@@ -105,7 +115,7 @@ def _run_tray(
     url = f"http://{host}:{port}"  # noqa: S310 — localhost 不需要 HTTPS
 
     # 加载图标
-    icon_path = _base_dir() / ICON_FILE
+    icon_path = _resource_dir() / ICON_FILE
     if icon_path.exists():
         image = Image.open(str(icon_path))
     else:
@@ -314,7 +324,7 @@ _UPDATE_STAGING = "update_staging"
 
 
 def _apply_pending_update(base: Path) -> bool:
-    """如果 update_staging/extracted/ 存在，启动独立更新器进程来覆盖文件。
+    """如果 update_staging/extracted/ 存在且完整性标记有效，启动独立更新器进程来覆盖文件。
 
     主程序无法覆盖自身的 exe/dll，因此委托给外部更新器：
     updater.py 等待主程序退出 → 覆盖文件 → 重新启动 exe。
@@ -325,34 +335,41 @@ def _apply_pending_update(base: Path) -> bool:
     """
     import subprocess as _sp
 
-    staging = base / _UPDATE_STAGING / "extracted"
+    staging_dir = base / _UPDATE_STAGING
+    staging = staging_dir / "extracted"
+    ready_marker = staging_dir / "UPDATE_READY"
+
     if not staging.exists():
+        return False
+
+    # 完整性检查：仅当 UPDATE_READY 标记文件存在时才应用更新
+    if not ready_marker.exists():
+        logger.warning("检测到不完整的更新下载，清理并跳过")
+        try:
+            import shutil
+            shutil.rmtree(str(staging_dir))
+        except OSError as e:
+            logger.error(f"清理不完整更新失败: {e}")
         return False
 
     logger.info(f"检测到待应用的更新: {staging}")
 
-    # 定位更新器脚本（打包后与 exe 同目录，开发模式在脚本旁）
-    updater = base / "updater.py"
-    if not updater.exists():
-        logger.error(f"更新器脚本不存在: {updater}")
-        return False
-
-    # 定位 exe 或 python 解释器
     exe_path = sys.executable  # 打包后就是 DocAI-Pipeline.exe
     pid = os.getpid()
 
-    # 确定 Python 解释器路径（打包模式下 updater.py 是纯脚本，需要用 Python 运行）
     if getattr(sys, "frozen", False):
-        # onedir 模式：使用打包自带的 python（在 _internal/ 下）或系统 Python
-        # 由于打包后没有独立 python.exe，将 updater 打包为独立 exe 更可靠
-        # 这里改用 updater.exe（由 spec 打包）
+        # 打包模式：使用同目录下的 updater.exe（由 spec 打包）
         updater_exe = base / "updater.exe"
-        if updater_exe.exists():
-            cmd = [str(updater_exe), str(base), exe_path, str(pid)]
-        else:
-            # 回退：尝试用系统 Python 运行脚本
-            cmd = ["python", str(updater), str(base), exe_path, str(pid)]
+        if not updater_exe.exists():
+            logger.error(f"更新器不存在: {updater_exe}")
+            return False
+        cmd = [str(updater_exe), str(base), exe_path, str(pid)]
     else:
+        # 开发模式：用当前 Python 解释器运行 updater.py
+        updater = base / "updater.py"
+        if not updater.exists():
+            logger.error(f"更新器脚本不存在: {updater}")
+            return False
         cmd = [sys.executable, str(updater), str(base), exe_path, str(pid)]
 
     logger.info(f"启动更新器: {' '.join(cmd)}")
@@ -384,7 +401,7 @@ def _auto_check_and_download(host: str, port: int) -> None:
         # noinspection HttpUrlsUsage
         url = f"http://{host}:{port}/api/update/download"  # noqa: S310
         req = urllib.request.Request(url, method="POST")
-        with urllib.request.urlopen(req, timeout=5) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
             result = _json.loads(resp.read())
             logger.info(f"自动更新检测: {result.get('message', '')}")
     except (OSError, urllib.error.URLError, ValueError) as e:
@@ -409,7 +426,8 @@ def main() -> None:
     os.environ["DOCAI_DESKTOP"] = "1"
 
     # 设置工作目录为 ai-service 根（确保 .env / user_settings.json 可被找到）
-    base = _base_dir()
+    base = _base_dir()        # 应用根目录（exe 所在目录）
+    res_dir = _resource_dir() # 打包资源目录（_internal/ 或开发模式下同 base）
     os.chdir(base)
 
     # 应用上次下载好的更新（委托给独立更新器进程）
@@ -418,7 +436,7 @@ def main() -> None:
         return
 
     # 显示 Splash 闪屏
-    splash_root, splash_destroy = _show_splash(base)
+    splash_root, splash_destroy = _show_splash(res_dir)
 
     if _splash_cancelled():
         logger.info("用户在闪屏阶段取消了启动")
@@ -507,7 +525,7 @@ def main() -> None:
         # pywebview 原生窗口模式
         assert _webview is not None
         # 窗口图标：pywebview(Windows) 只支持 .ico 格式
-        _icon_path = base / ICON_FILE
+        _icon_path = res_dir / ICON_FILE
         _wv_window = _webview.create_window(
             APP_NAME,
             url,

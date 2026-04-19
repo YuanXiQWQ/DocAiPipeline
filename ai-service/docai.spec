@@ -25,8 +25,6 @@ datas = [
     # 应用图标（系统托盘 + 窗口图标 + 闪屏）
     (str(BASE / "icon.ico"), "."),
     (str(BASE / "icon.png"), "."),
-    # 独立更新器脚本（主程序退出后由其完成文件覆盖）
-    (str(BASE / "updater.py"), "."),
 ]
 
 # 版本号文件（CI 构建时生成）
@@ -167,12 +165,59 @@ exe = EXE(
     icon=str(BASE / "icon.ico"),
 )
 
+# ------------------------------------------------------------------
+# 独立更新器 updater.exe（onefile 模式，体积极小，仅依赖标准库）
+# 主程序无法覆盖自身的 exe/dll，因此委托给这个独立进程。
+# ------------------------------------------------------------------
+
+updater_a = Analysis(
+    [str(BASE / "updater.py")],
+    pathex=[str(BASE)],
+    binaries=[],
+    datas=[],
+    hiddenimports=[],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+
+updater_pyz = PYZ(updater_a.pure, updater_a.zipped_data, cipher=block_cipher)
+
+updater_exe = EXE(
+    updater_pyz,
+    updater_a.scripts,
+    updater_a.binaries,
+    updater_a.zipfiles,
+    updater_a.datas,
+    [],
+    name="updater",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=str(BASE / "icon.ico"),
+)
+
 # onedir 模式：所有文件收集到 dist/DocAI-Pipeline/ 目录
+# updater.exe 也放进同一目录
 coll = COLLECT(
     exe,
     a.binaries,
     a.zipfiles,
     a.datas,
+    updater_exe,
     strip=False,
     upx=True,
     upx_exclude=[],

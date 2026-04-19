@@ -2,6 +2,7 @@
 
 在主程序退出后执行文件覆盖，再重新启动 exe。
 由 launcher.py 在检测到待应用更新时以子进程方式调用。
+带有 tkinter 闪屏窗口和进度条，让用户在更新过程中有视觉反馈。
 
 用法（由 launcher 自动调用）：
     python updater.py <app_dir> <exe_path> <pid>
@@ -18,6 +19,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -28,6 +30,13 @@ PROTECTED = {"user_settings.json", "desktop_prefs.json", "output", UPDATE_STAGIN
 
 LOG_FILE = "update.log"
 
+# ── UI 状态（线程间通信） ──
+_ui_state: dict = {"message": "正在准备更新…", "progress": 0, "done": False}
+
+
+# ------------------------------------------------------------------
+# 日志
+# ------------------------------------------------------------------
 
 def _log(msg: str) -> None:
     """写日志到文件（此时无法使用 loguru）。"""
@@ -40,15 +49,19 @@ def _log(msg: str) -> None:
         pass
 
 
+# ------------------------------------------------------------------
+# 更新逻辑
+# ------------------------------------------------------------------
+
 def _wait_for_exit(pid: int, timeout: float = 30.0) -> bool:
     """等待指定进程退出。"""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
-            os.kill(pid, 0)  # 检测进程是否存在（不发送信号）
+            os.kill(pid, 0)
             time.sleep(0.5)
         except OSError:
-            return True  # 进程已退出
+            return True
     return False
 
 
@@ -65,11 +78,15 @@ def _apply(app_dir: Path) -> bool:
     children = list(staging.iterdir())
     src = children[0] if len(children) == 1 and children[0].is_dir() else staging
 
+    # 先统计要复制的项目数量
+    items = [item for item in src.iterdir() if item.name not in PROTECTED]
+    total = max(len(items), 1)
+
     success = True
-    for item in src.iterdir():
-        if item.name in PROTECTED:
-            continue
+    for i, item in enumerate(items):
         dest = app_dir / item.name
+        _ui_state["message"] = f"正在更新: {item.name}"
+        _ui_state["progress"] = int(20 + 65 * i / total)  # 20%-85%
         try:
             if item.is_dir():
                 if dest.exists():
@@ -87,6 +104,8 @@ def _apply(app_dir: Path) -> bool:
         _log("部分文件覆盖失败")
 
     # 清理 staging
+    _ui_state["message"] = "正在清理临时文件…"
+    _ui_state["progress"] = 90
     try:
         shutil.rmtree(str(app_dir / UPDATE_STAGING))
         _log("暂存目录已清理")
@@ -96,31 +115,30 @@ def _apply(app_dir: Path) -> bool:
     return success
 
 
-def main() -> None:
-    if len(sys.argv) < 4:
-        print(f"用法: {sys.argv[0]} <app_dir> <exe_path> <pid>")
-        sys.exit(1)
-
-    app_dir = Path(sys.argv[1])
-    exe_path = sys.argv[2]
-    pid = int(sys.argv[3])
-
-    os.chdir(app_dir)
-
+def _update_worker(app_dir: Path, exe_path: str, pid: int) -> None:
+    """后台线程：执行等待→覆盖→重启的完整流程。"""
     _log(f"更新器启动: app_dir={app_dir}, exe={exe_path}, pid={pid}")
 
-    # 等待主程序退出
+    # 阶段 1：等待主程序退出 (0% → 15%)
+    _ui_state["message"] = "正在等待应用关闭…"
+    _ui_state["progress"] = 5
     _log(f"等待主程序 (PID={pid}) 退出…")
     if not _wait_for_exit(pid, timeout=30):
         _log("主程序未在30秒内退出，强制继续")
+    _ui_state["progress"] = 15
 
     # 额外等待，确保文件句柄释放
+    _ui_state["message"] = "正在释放文件…"
     time.sleep(1.0)
+    _ui_state["progress"] = 20
 
-    # 应用更新
+    # 阶段 2：应用更新 (20% → 90%)
+    _ui_state["message"] = "正在应用更新…"
     ok = _apply(app_dir)
 
-    # 重新启动主程序
+    # 阶段 3：重新启动 (90% → 100%)
+    _ui_state["message"] = "正在重新启动应用…"
+    _ui_state["progress"] = 95
     _log(f"重新启动: {exe_path}")
     try:
         subprocess.Popen(
@@ -130,9 +148,142 @@ def main() -> None:
         )
     except OSError as e:
         _log(f"启动失败: {e}")
+
+    _ui_state["progress"] = 100
+    _ui_state["message"] = "更新完成！" if ok else "更新完成（部分文件失败）"
+    _log("更新器完成" if ok else "更新器完成（有错误）")
+    time.sleep(0.8)
+    _ui_state["done"] = True
+
+
+# ------------------------------------------------------------------
+# Tkinter 闪屏 UI
+# ------------------------------------------------------------------
+
+def _run_splash(app_dir: Path, exe_path: str, pid: int) -> None:
+    """显示更新闪屏窗口，同时在后台线程执行更新。"""
+    try:
+        import tkinter as tk
+    except ImportError:
+        # 无 tkinter 时直接在当前线程执行
+        _update_worker(app_dir, exe_path, pid)
+        return
+
+    root = tk.Tk()
+    root.overrideredirect(True)
+    root.attributes("-topmost", True)
+
+    sw, sh = 480, 200
+    x = (root.winfo_screenwidth() - sw) // 2
+    y = (root.winfo_screenheight() - sh) // 2
+    root.geometry(f"{sw}x{sh}+{x}+{y}")
+
+    canvas = tk.Canvas(root, width=sw, height=sh, highlightthickness=0)
+    canvas.pack(fill="both", expand=True)
+
+    # ── 背景渐变 ──
+    for i in range(sh):
+        r = int(240 + (250 - 240) * i / sh)
+        g = int(237 + (248 - 237) * i / sh)
+        b = int(255 + (255 - 255) * i / sh)
+        color = f"#{r:02x}{g:02x}{b:02x}"
+        canvas.create_line(0, i, sw, i, fill=color)
+
+    # ── 标题 ──
+    canvas.create_text(
+        sw // 2, 50,
+        text="DocAI Pipeline",
+        font=("Segoe UI", 20, "bold"),
+        fill="#4338ca",
+    )
+
+    # ── 状态文字 ──
+    status_text = canvas.create_text(
+        sw // 2, 95,
+        text="正在准备更新…",
+        font=("Segoe UI", 11),
+        fill="#64748b",
+    )
+
+    # ── 进度条背景 ──
+    bar_x, bar_y, bar_w, bar_h = 40, 130, sw - 80, 16
+    radius = bar_h // 2
+    canvas.create_oval(bar_x, bar_y, bar_x + bar_h, bar_y + bar_h, fill="#e2e8f0", outline="")
+    canvas.create_oval(bar_x + bar_w - bar_h, bar_y, bar_x + bar_w, bar_y + bar_h, fill="#e2e8f0", outline="")
+    canvas.create_rectangle(bar_x + radius, bar_y, bar_x + bar_w - radius, bar_y + bar_h, fill="#e2e8f0", outline="")
+
+    # ── 进度条前景（初始隐藏） ──
+    bar_fg_parts: list = []
+
+    # ── 百分比文字 ──
+    pct_text = canvas.create_text(
+        sw // 2, 165,
+        text="0%",
+        font=("Segoe UI", 10),
+        fill="#94a3b8",
+    )
+
+    def _draw_progress(pct: int) -> None:
+        """重绘进度条前景。"""
+        for item_id in bar_fg_parts:
+            canvas.delete(item_id)
+        bar_fg_parts.clear()
+
+        if pct <= 0:
+            return
+        filled_w = max(bar_h, int(bar_w * min(pct, 100) / 100))
+        bar_fg_parts.append(
+            canvas.create_oval(bar_x, bar_y, bar_x + bar_h, bar_y + bar_h, fill="#6366f1", outline="")
+        )
+        bar_fg_parts.append(
+            canvas.create_oval(bar_x + filled_w - bar_h, bar_y, bar_x + filled_w, bar_y + bar_h, fill="#6366f1", outline="")
+        )
+        bar_fg_parts.append(
+            canvas.create_rectangle(bar_x + radius, bar_y, bar_x + filled_w - radius, bar_y + bar_h, fill="#6366f1", outline="")
+        )
+
+    def _poll() -> None:
+        """每 100ms 轮询后台线程状态并更新 UI。"""
+        canvas.itemconfig(status_text, text=_ui_state["message"])
+        canvas.itemconfig(pct_text, text=f"{_ui_state['progress']}%")
+        _draw_progress(_ui_state["progress"])
+        if _ui_state["done"]:
+            # noinspection PyTypeChecker
+            root.after(300, lambda: root.destroy())
+        else:
+            # noinspection PyTypeChecker
+            root.after(100, lambda: _poll())
+
+    # 启动后台更新线程
+    worker = threading.Thread(
+        target=_update_worker,
+        args=(app_dir, exe_path, pid),
+        daemon=True,
+    )
+    worker.start()
+
+    # 开始轮询
+    # noinspection PyTypeChecker
+    root.after(100, lambda: _poll())
+    root.mainloop()
+
+
+# ------------------------------------------------------------------
+# 入口
+# ------------------------------------------------------------------
+
+def main() -> None:
+    if len(sys.argv) < 4:
+        _log(f"用法: {sys.argv[0]} <app_dir> <exe_path> <pid>")
         sys.exit(1)
 
-    _log("更新器完成" if ok else "更新器完成（有错误）")
+    app_dir = Path(sys.argv[1])
+    exe_path = sys.argv[2]
+    pid = int(sys.argv[3])
+
+    os.chdir(app_dir)
+
+    _run_splash(app_dir, exe_path, pid)
 
 
 if __name__ == "__main__":

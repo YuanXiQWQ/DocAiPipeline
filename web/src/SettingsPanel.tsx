@@ -30,6 +30,7 @@ import {
     setAutoUpdate as apiSetAutoUpdate,
     getUpdateStatus,
     triggerUpdateDownload,
+    testTriggerUpdate,
     restartAndApplyUpdate,
     testApiKey,
     extractErrorMessage,
@@ -119,7 +120,7 @@ export default function SettingsPanel({onSettingsChange}: Props) {
             getAutoUpdate().catch(() => ({enabled: false})),
             getUpdateStatus().catch(() => null),
         ])
-            .then(([res, platformRes, autostartRes, closeBehaviorRes, autoUpdateRes, updateStatusRes]) => {
+            .then(async ([res, platformRes, autostartRes, closeBehaviorRes, autoUpdateRes, updateStatusRes]) => {
                 setCurrentSettings(res.settings);
                 setModels(res.available_models);
                 setSelectedModel(res.settings.openai_model);
@@ -145,6 +146,14 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                 setCloseBehaviorState(closeBehaviorRes.behavior);
                 setAutoUpdateState(autoUpdateRes.enabled);
                 if (updateStatusRes) setUpdateStatus(updateStatusRes);
+
+                // 桌面模式下自动检查版本更新
+                if (platformRes.desktop) {
+                    try {
+                        const info = await checkUpdate();
+                        setVersionInfo(info);
+                    } catch { /* 静默失败 */ }
+                }
             })
             .catch((err) => setError(extractErrorMessage(err)))
             .finally(() => {
@@ -750,18 +759,24 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                     </p>
                                     <button
                                         onClick={async () => {
-                                            await triggerUpdateDownload();
-                                            const poll = setInterval(async () => {
-                                                try {
-                                                    const s = await getUpdateStatus();
-                                                    setUpdateStatus(s);
-                                                    if (s.status !== "downloading") clearInterval(poll);
-                                                } catch {
-                                                    clearInterval(poll);
-                                                }
-                                            }, 1500);
-                                            const s = await getUpdateStatus();
-                                            setUpdateStatus(s);
+                                            try {
+                                                const res = await triggerUpdateDownload();
+                                                if (!res.started) return;
+                                                // 启动轮询监控下载进度
+                                                const poll = setInterval(async () => {
+                                                    try {
+                                                        const s = await getUpdateStatus();
+                                                        setUpdateStatus(s);
+                                                        if (s.status !== "downloading") clearInterval(poll);
+                                                    } catch {
+                                                        clearInterval(poll);
+                                                    }
+                                                }, 1500);
+                                                const s = await getUpdateStatus();
+                                                setUpdateStatus(s);
+                                            } catch {
+                                                setUpdateError(t("settings.update_error"));
+                                            }
                                         }}
                                         disabled={updateStatus?.status === "downloading"}
                                         className="text-sm text-primary-600 hover:text-primary-800 font-medium flex items-center gap-1 disabled:opacity-50"
@@ -781,10 +796,24 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                                             {updateStatus.message}
                                         </p>
                                         <button
-                                            onClick={() => restartAndApplyUpdate().catch(() => {})}
-                                            className="text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md px-3 py-1 transition-colors flex items-center gap-1"
+                                            onClick={async () => {
+                                                setUpdateError(null);
+                                                setUpdateStatus(prev => prev ? {...prev, status: "downloading" as const, message: "正在重启…"} : prev);
+                                                try {
+                                                    await restartAndApplyUpdate();
+                                                } catch (err) {
+                                                    setUpdateStatus(prev => prev ? {...prev, status: "ready" as const} : prev);
+                                                    setUpdateError(extractErrorMessage(err));
+                                                }
+                                            }}
+                                            disabled={updateStatus.message === "正在重启…"}
+                                            className="text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md px-3 py-1.5 transition-colors flex items-center gap-1.5 disabled:opacity-50 shadow-sm"
                                         >
-                                            <Power className="w-3 h-3"/>
+                                            {updateStatus.message === "正在重启…" ? (
+                                                <Loader2 className="w-3 h-3 animate-spin"/>
+                                            ) : (
+                                                <Power className="w-3 h-3"/>
+                                            )}
                                             {t("settings.update_restart")}
                                         </button>
                                     </div>
@@ -800,6 +829,45 @@ export default function SettingsPanel({onSettingsChange}: Props) {
                         {updateError && (
                             <p className="text-xs text-red-500">{updateError}</p>
                         )}
+
+                        {/* 【临时测试按钮】强制触发更新下载，验证后删除 */}
+                        <div className="mt-2 pt-2 border-t border-dashed border-orange-300">
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        setUpdateError(null);
+                                        const res = await testTriggerUpdate();
+                                        if (!res.started) {
+                                            setUpdateError(res.message);
+                                            return;
+                                        }
+                                        // 模拟有更新可用，让 UI 显示更新区域
+                                        setVersionInfo({current: versionInfo?.current ?? appVersion, latest: "测试中…", has_update: true});
+                                        const poll = setInterval(async () => {
+                                            try {
+                                                const s = await getUpdateStatus();
+                                                setUpdateStatus(s);
+                                                if (s.version) {
+                                                    setVersionInfo(prev => prev ? {...prev, latest: s.version} : prev);
+                                                }
+                                                if (s.status !== "downloading") clearInterval(poll);
+                                            } catch {
+                                                clearInterval(poll);
+                                            }
+                                        }, 1500);
+                                        const s = await getUpdateStatus();
+                                        setUpdateStatus(s);
+                                    } catch {
+                                        setUpdateError("测试触发失败");
+                                    }
+                                }}
+                                disabled={updateStatus?.status === "downloading"}
+                                className="px-3 py-1.5 text-xs font-medium text-orange-700 bg-orange-100 border border-orange-300 rounded-lg hover:bg-orange-200 transition-colors disabled:opacity-50"
+                            >
+                                🧪 测试：强制下载最新 Release
+                            </button>
+                            <p className="text-[10px] text-orange-400 mt-1">跳过版本比较，直接下载。发布验证后删除此按钮。</p>
+                        </div>
                     </div>
 
                     {/* 自动保存状态指示 */}

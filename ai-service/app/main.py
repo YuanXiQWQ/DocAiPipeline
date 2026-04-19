@@ -402,6 +402,7 @@ def _is_newer(latest: str, current: str) -> bool:
 # 更新状态：idle / downloading / ready / error
 _update_state: dict = {"status": "idle", "progress": 0, "message": "", "version": ""}
 _UPDATE_DIR = "update_staging"
+_UPDATE_READY_MARKER = "UPDATE_READY"
 
 
 @app.get("/api/auto-update")
@@ -432,15 +433,16 @@ async def trigger_update_download():
     """触发后台下载最新版本。"""
     import asyncio
     if _update_state["status"] == "downloading":
-        return {"message": "正在下载中"}
+        return {"started": True, "message": "正在下载中"}
     # 先检查是否有更新
     version_info = await check_version()
     if not version_info.get("has_update"):
-        return {"message": "已是最新版本"}
+        return {"started": False, "message": "已是最新版本"}
 
-    # 后台下载
+    # 重置状态后启动后台下载
+    _update_state.update(status="idle", progress=0, message="", version="")
     asyncio.create_task(_download_update())
-    return {"message": "开始下载更新"}
+    return {"started": True, "message": "开始下载更新"}
 
 
 async def _download_update() -> None:
@@ -451,8 +453,12 @@ async def _download_update() -> None:
     _update_state["status"] = "downloading"
     _update_state["progress"] = 0
     _update_state["message"] = "正在获取更新信息…"
+
+    # 连接超时 30s，读写不限时（大文件可能几百 MB）
+    timeout = httpx.Timeout(connect=30.0, read=1800.0, write=1800.0, pool=30.0)
+
     try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
             # 获取最新 Release
             resp = await client.get(
                 f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
@@ -478,8 +484,10 @@ async def _download_update() -> None:
             download_url = str(zip_asset["browser_download_url"])
             total_size = int(zip_asset.get("size", 0))
 
-            # 准备目录
+            # 准备目录（先清理旧的不完整下载）
             staging = Path(_UPDATE_DIR)
+            if staging.exists():
+                shutil.rmtree(staging)
             staging.mkdir(parents=True, exist_ok=True)
             asset_name = str(zip_asset["name"])
             zip_path = staging / asset_name
@@ -503,6 +511,9 @@ async def _download_update() -> None:
                 zf.extractall(str(extract_dir))
             zip_path.unlink()  # 删除 zip，只保留解压结果
 
+            # 写入完整性标记文件，launcher 启动时据此判断下载是否完成
+            (staging / _UPDATE_READY_MARKER).write_text(tag, encoding="utf-8")
+
             _update_state.update(
                 status="ready",
                 progress=100,
@@ -512,6 +523,28 @@ async def _download_update() -> None:
     except (OSError, httpx.HTTPError, zipfile.BadZipFile, KeyError) as e:
         logger.warning(f"下载更新失败: {e}")
         _update_state.update(status="error", message=f"下载失败: {e}")
+        # 清理不完整的下载
+        staging = Path(_UPDATE_DIR)
+        if staging.exists():
+            try:
+                shutil.rmtree(staging)
+            except OSError:
+                pass
+
+
+@app.post("/api/update/test-trigger")
+async def test_trigger_update():
+    """【临时测试】跳过版本比较，强制下载最新 Release 并标记为待应用更新。
+
+    用于在发布后测试完整的 下载→解压→标记→重启覆盖 流程。
+    验证完毕后请删除此端点。
+    """
+    import asyncio
+    if _update_state["status"] == "downloading":
+        return {"started": True, "message": "正在下载中"}
+    _update_state.update(status="idle", progress=0, message="", version="")
+    asyncio.create_task(_download_update())
+    return {"started": True, "message": "【测试】强制开始下载最新 Release"}
 
 
 @app.post("/api/update/restart")
@@ -524,30 +557,30 @@ async def restart_and_apply():
         raise HTTPException(status_code=400, detail="仅桌面模式支持自动更新重启")
 
     staging = Path(_UPDATE_DIR) / "extracted"
-    if not staging.exists():
+    ready_marker = Path(_UPDATE_DIR) / _UPDATE_READY_MARKER
+    if not staging.exists() or not ready_marker.exists():
         raise HTTPException(status_code=400, detail="没有待应用的更新")
 
     import subprocess as _sp
 
-    # 定位应用根目录和更新器
+    # 定位应用根目录（exe 所在目录，不是 _MEIPASS/_internal/）
     if getattr(sys, "frozen", False):
-        base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+        base = Path(sys.executable).parent
     else:
         base = Path(__file__).resolve().parent.parent
-    updater = base / "updater.py"
-    if not updater.exists():
-        raise HTTPException(status_code=500, detail="更新器脚本不存在")
 
     exe_path = sys.executable
     pid = os.getpid()
 
     if getattr(sys, "frozen", False):
         updater_exe = base / "updater.exe"
-        if updater_exe.exists():
-            cmd = [str(updater_exe), str(base), exe_path, str(pid)]
-        else:
-            cmd = ["python", str(updater), str(base), exe_path, str(pid)]
+        if not updater_exe.exists():
+            raise HTTPException(status_code=500, detail="更新器 updater.exe 不存在")
+        cmd = [str(updater_exe), str(base), exe_path, str(pid)]
     else:
+        updater = base / "updater.py"
+        if not updater.exists():
+            raise HTTPException(status_code=500, detail="更新器脚本不存在")
         cmd = [sys.executable, str(updater), str(base), exe_path, str(pid)]
 
     logger.info(f"用户请求重启以应用更新，启动更新器: {' '.join(cmd)}")
