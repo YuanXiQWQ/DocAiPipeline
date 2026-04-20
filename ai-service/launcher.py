@@ -195,12 +195,28 @@ def _show_splash(base: Path) -> tuple[Any, Any]:
 
     root = tk.Tk()
     root.overrideredirect(True)
-    root.attributes("-topmost", True)
 
     sw, sh = 620, 360
     x = (root.winfo_screenwidth() - sw) // 2
     y = (root.winfo_screenheight() - sh) // 2
     root.geometry(f"{sw}x{sh}+{x}+{y}")
+
+    # 聚焦到前台
+    root.lift()
+    root.focus_force()
+
+    # ── 拖拽支持 ──
+    _drag: dict[str, int] = {"x": 0, "y": 0}
+
+    def _on_press(e: Any) -> None:
+        _drag["x"] = e.x
+        _drag["y"] = e.y
+
+    def _on_drag(e: Any) -> None:
+        root.geometry(f"+{root.winfo_x() + e.x - _drag['x']}+{root.winfo_y() + e.y - _drag['y']}")
+
+    root.bind("<Button-1>", _on_press)
+    root.bind("<B1-Motion>", _on_drag)
 
     canvas = tk.Canvas(root, width=sw, height=sh, highlightthickness=0)
     canvas.pack(fill="both", expand=True)

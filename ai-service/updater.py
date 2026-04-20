@@ -25,8 +25,12 @@ from pathlib import Path
 
 UPDATE_STAGING = "update_staging"
 
-# 不覆盖的用户数据
-PROTECTED = {"user_settings.json", "desktop_prefs.json", "output", UPDATE_STAGING}
+# 不覆盖的文件/目录（用户数据 + 正在运行的更新器自身）
+PROTECTED = {
+    "user_settings.json", "desktop_prefs.json", "output",
+    UPDATE_STAGING, "update.log",
+    "updater.exe",  # 更新器正在运行，无法覆盖自身
+}
 
 LOG_FILE = "update.log"
 
@@ -171,20 +175,36 @@ def _run_splash(app_dir: Path, exe_path: str, pid: int) -> None:
 
     root = tk.Tk()
     root.overrideredirect(True)
-    root.attributes("-topmost", True)
 
     sw, sh = 480, 200
     x = (root.winfo_screenwidth() - sw) // 2
     y = (root.winfo_screenheight() - sh) // 2
     root.geometry(f"{sw}x{sh}+{x}+{y}")
 
+    # 聚焦到前台
+    root.lift()
+    root.focus_force()
+
+    # ── 拖拽支持 ──
+    _drag = {"x": 0, "y": 0}
+
+    def _on_press(e: tk.Event) -> None:  # type: ignore[type-arg]
+        _drag["x"] = e.x
+        _drag["y"] = e.y
+
+    def _on_drag(e: tk.Event) -> None:  # type: ignore[type-arg]
+        root.geometry(f"+{root.winfo_x() + e.x - _drag['x']}+{root.winfo_y() + e.y - _drag['y']}")
+
+    root.bind("<Button-1>", _on_press)
+    root.bind("<B1-Motion>", _on_drag)
+
     canvas = tk.Canvas(root, width=sw, height=sh, highlightthickness=0)
     canvas.pack(fill="both", expand=True)
 
-    # ── 背景渐变 ──
+    # ── 背景渐变（浅紫 → 白） ──
     for i in range(sh):
-        r = int(240 + (250 - 240) * i / sh)
-        g = int(237 + (248 - 237) * i / sh)
+        r = int(245 + (252 - 245) * i / sh)
+        g = int(238 + (248 - 238) * i / sh)
         b = int(255 + (255 - 255) * i / sh)
         color = f"#{r:02x}{g:02x}{b:02x}"
         canvas.create_line(0, i, sw, i, fill=color)
@@ -194,7 +214,7 @@ def _run_splash(app_dir: Path, exe_path: str, pid: int) -> None:
         sw // 2, 50,
         text="DocAI Pipeline",
         font=("Segoe UI", 20, "bold"),
-        fill="#4338ca",
+        fill="#9333ea",
     )
 
     # ── 状态文字 ──
@@ -202,45 +222,33 @@ def _run_splash(app_dir: Path, exe_path: str, pid: int) -> None:
         sw // 2, 95,
         text="正在准备更新…",
         font=("Segoe UI", 11),
-        fill="#64748b",
+        fill="#7c3aed",
     )
 
-    # ── 进度条背景 ──
-    bar_x, bar_y, bar_w, bar_h = 40, 130, sw - 80, 16
-    radius = bar_h // 2
-    canvas.create_oval(bar_x, bar_y, bar_x + bar_h, bar_y + bar_h, fill="#e2e8f0", outline="")
-    canvas.create_oval(bar_x + bar_w - bar_h, bar_y, bar_x + bar_w, bar_y + bar_h, fill="#e2e8f0", outline="")
-    canvas.create_rectangle(bar_x + radius, bar_y, bar_x + bar_w - radius, bar_y + bar_h, fill="#e2e8f0", outline="")
-
-    # ── 进度条前景（初始隐藏） ──
-    bar_fg_parts: list = []
+    # ── 进度条（简单矩形，避免圆角拼接间隙） ──
+    bar_x, bar_y, bar_w, bar_h = 40, 130, sw - 80, 14
+    # 背景槽
+    canvas.create_rectangle(bar_x, bar_y, bar_x + bar_w, bar_y + bar_h,
+                            fill="#e9d5ff", outline="#ddd6fe", width=1)
+    # 前景（动态更新）
+    bar_fg = canvas.create_rectangle(bar_x, bar_y, bar_x, bar_y + bar_h,
+                                     fill="#bd7fff", outline="")
 
     # ── 百分比文字 ──
     pct_text = canvas.create_text(
-        sw // 2, 165,
+        sw // 2, 162,
         text="0%",
         font=("Segoe UI", 10),
-        fill="#94a3b8",
+        fill="#a78bfa",
     )
 
     def _draw_progress(pct: int) -> None:
-        """重绘进度条前景。"""
-        for item_id in bar_fg_parts:
-            canvas.delete(item_id)
-        bar_fg_parts.clear()
-
+        """更新进度条前景宽度。"""
         if pct <= 0:
+            canvas.coords(bar_fg, bar_x, bar_y, bar_x, bar_y + bar_h)
             return
-        filled_w = max(bar_h, int(bar_w * min(pct, 100) / 100))
-        bar_fg_parts.append(
-            canvas.create_oval(bar_x, bar_y, bar_x + bar_h, bar_y + bar_h, fill="#6366f1", outline="")
-        )
-        bar_fg_parts.append(
-            canvas.create_oval(bar_x + filled_w - bar_h, bar_y, bar_x + filled_w, bar_y + bar_h, fill="#6366f1", outline="")
-        )
-        bar_fg_parts.append(
-            canvas.create_rectangle(bar_x + radius, bar_y, bar_x + filled_w - radius, bar_y + bar_h, fill="#6366f1", outline="")
-        )
+        filled_w = max(2, int(bar_w * min(pct, 100) / 100))
+        canvas.coords(bar_fg, bar_x, bar_y, bar_x + filled_w, bar_y + bar_h)
 
     def _poll() -> None:
         """每 100ms 轮询后台线程状态并更新 UI。"""
